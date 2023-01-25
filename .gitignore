@@ -1,2 +1,3 @@
 *.json
 /sodar
+.baserow_token

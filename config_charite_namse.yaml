@@ -52,6 +52,9 @@ pel:
           - original_name: Gestaltmatcher-ID
             mapped_name: Gestaltmatcher-EV
             formatter: boolean
+          - original_name: Teilnahmeerklärung
+            mapped_name: Teilnahmeerklärung
+            formatter: boolean
           - original_name: HPO-ID
             mapped_name: HPO Terms
           - original_name: Gen. Basisdiagnostik (Chromosomen, Array-CGH)
@@ -134,6 +137,8 @@ outputs:
     - original_name: Fotoeinverständnis
       formatter: boolean
     - original_name: Gestaltmatcher-EV
+      formatter: boolean
+    - original_name: Teilnahmeerklärung
       formatter: boolean
     - original_name: HPO Terms
     - original_name: Basisdiagnostik
