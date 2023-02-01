@@ -63,6 +63,7 @@ def delete_entries(table_id, row_ids):
             "items": row_ids
         }
     )
+    resp.raise_for_status()
 
 
 def check_table_empty(table_id):
@@ -87,41 +88,32 @@ def check_table_empty(table_id):
         for entry in data:
             if all(v in NONE_VALUES for k, v in entry.items() if k in writable_fields and k not in IGNORED_FIELDS):
                 none_ids.append(entry["id"])
-            else:
-                print(entry)
         delete_entries(table_id, none_ids)
 
 
 def check_table_duplicates(table_id, identifying_keys):
     """Check a given table for duplicate keys.
     """
+    results = get_data(table_id)
 
-    resp = requests.get(
-        f"https://phenotips.charite.de/api/database/rows/table/{table_id}/?user_field_names=true",
-        headers={
-            "Authorization": f"Token {TOKEN}"
-        }
-    )
+    data_by_keys = defaultdict(list)
+    for entry in results:
+        identifier = tuple(entry[k] for k in identifying_keys)
+        data_by_keys[identifier].append(entry)
 
-    resp.raise_for_status()
-    data = resp.json()
-
-    if "results" in data:
-        results = data["results"]
-
-        data_by_keys = defaultdict(list)
-        for entry in results:
-            identifier = tuple(entry[k] for k in identifying_keys)
-            data_by_keys[identifier].append(entry)
-
-        for identifier, values in data_by_keys.items():
-            if len(values) > 1:
-                print(identifier, "is duplicated")
-        else:
-            print("All other entries are fine.")
+    duplicate_ids = []
+    for identifier, values in data_by_keys.items():
+        if len(values) > 1:
+            print(identifier, "is duplicated")
+            duplicate_ids += [
+                v['id'] for v in values[1:]
+            ]
     else:
-        print(data)
+        print("All other entries are fine.")
+    return duplicate_ids
 
 if __name__ == "__main__":
-    check_table_duplicates(387, ["Lastname", "Firstname", "Birthdate"])
+    dup_ids = check_table_duplicates(386, ["Lastname", "Firstname", "Birthdate"])
+    if dup_ids:
+        delete_entries(386, dup_ids)
     check_table_empty(389)

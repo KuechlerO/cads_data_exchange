@@ -25,9 +25,6 @@ fields:
 - to: SAP ID
   type: text
 - link_table: Cases
-  to: Cases
-  type: link_row
-- link_table: Cases
   to: Cases - AdditionalMembers
   type: link_row
 - to: Tested
@@ -43,3 +40,5 @@ fields:
     value: Other
   to: RelationToIndex
   type: single_select
+id: 387
+name: PatientsRelatives

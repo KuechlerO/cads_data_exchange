@@ -2,9 +2,6 @@ fields:
 - to: Title
   type: formula
 - link_table: PatientsRelatives
-  to: Indexpatient
-  type: link_row
-- link_table: PatientsRelatives
   to: AdditionalMembers
   type: link_row
 - to: Datum Einschluss
@@ -78,10 +75,6 @@ fields:
   type: single_select
 - to: ICD10
   type: text
-- to: Erstellungsdatum
-  type: created_on
-- to: HSA Termin
-  type: date
 - link_table: Findings
   to: Findings
   type: link_row
@@ -126,3 +119,7 @@ fields:
   type: url
 - to: Varfish
   type: url
+- to: SV ID
+  type: formula
+id: 386
+name: Cases

@@ -51,3 +51,5 @@ fields:
 - link_table: Cases
   to: Cases
   type: link_row
+id: 389
+name: Findings

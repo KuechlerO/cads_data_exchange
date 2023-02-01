@@ -28,6 +28,8 @@ schema_output_dir.mkdir(exist_ok=True)
 for table_name, table_id in tables.items():
     fields = get_fields(table_id)
     schema = {
+        "name": table_name,
+        "id": table_id,
         "fields": []
     }
     for field in fields:

@@ -25,3 +25,5 @@ fields:
 - link_table: Cases
   to: Cases
   type: link_row
+id: 390
+name: Personnel
