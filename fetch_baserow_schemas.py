@@ -16,13 +16,9 @@ def get_fields(table_id):
 
 tables = {
     "Cases": 386,
-    "Patients": 387,
-    "Families": 388,
+    "PatientsRelatives": 387,
     "Findings": 389,
     "Personnel": 390,
-    "Requests": 391,
-    "Health Insurances": 392,
-    "HSA-Timeslots": 393,
 }
 
 from pathlib import Path

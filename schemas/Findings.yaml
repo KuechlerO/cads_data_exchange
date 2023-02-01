@@ -1,0 +1,53 @@
+fields:
+- to: HGVS
+  type: formula
+- to: Genename
+  type: text
+- to: NM Transcript
+  type: text
+- select_options:
+  - id: 1772
+    value: Pathogenic (V)
+  - id: 1773
+    value: Likely Pathogenic (IV)
+  - id: 1774
+    value: Uncertain Significance (III)
+  - id: 1775
+    value: Likely Benign (II)
+  - id: 1776
+    value: Benign (I)
+  to: ACMG Classification
+  type: single_select
+- to: Mutation
+  type: text
+- to: Clinvar-ID
+  type: text
+- to: HGMD-ID
+  type: text
+- select_options:
+  - id: 1777
+    value: Heterozygous
+  - id: 1778
+    value: Homozygous
+  - id: 1779
+    value: Hemizygous
+  - id: 1780
+    value: Homoplasmic
+  - id: 1781
+    value: Heteroplasmic
+  to: Zygosity
+  type: single_select
+- select_options:
+  - id: 1782
+    value: Main
+  - id: 1783
+    value: Incidental
+  - id: 1784
+    value: Research
+  to: ResultType
+  type: single_select
+- to: Comment
+  type: long_text
+- link_table: Cases
+  to: Cases
+  type: link_row

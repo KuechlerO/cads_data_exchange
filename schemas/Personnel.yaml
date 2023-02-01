@@ -1,0 +1,27 @@
+fields:
+- to: Shorthand
+  type: text
+- to: Email
+  type: email
+- to: Lastname
+  type: text
+- to: Firstname
+  type: text
+- to: Title
+  type: text
+- to: Position
+  type: text
+- select_options:
+  - id: 1769
+    value: Sender
+  - id: 1770
+    value: Validator
+  - id: 1771
+    value: Investigator
+  to: Role
+  type: multiple_select
+- to: Active
+  type: boolean
+- link_table: Cases
+  to: Cases
+  type: link_row

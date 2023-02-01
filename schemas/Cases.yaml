@@ -1,0 +1,128 @@
+fields:
+- to: Title
+  type: formula
+- link_table: PatientsRelatives
+  to: Indexpatient
+  type: link_row
+- link_table: PatientsRelatives
+  to: AdditionalMembers
+  type: link_row
+- to: Datum Einschluss
+  type: date
+- to: Datum Fallkonferenz
+  type: date
+- to: Datum Labor
+  type: date
+- to: Datum Befundkonferenz
+  type: date
+- to: Datum Befund
+  type: date
+- to: HPO Terms
+  type: long_text
+- to: Zufallsbefunde
+  type: boolean
+- to: Datenverarbeitung
+  type: boolean
+- to: Fotoeinverständnis
+  type: boolean
+- to: Gestaltmatcher-EV
+  type: boolean
+- to: Teilnahmeerklärung
+  type: boolean
+- to: TE an Frau Otto
+  type: boolean
+- select_options:
+  - id: 1788
+    value: Karyotyping
+  - id: 1789
+    value: Array-CGH
+  - id: 1790
+    value: Fragile X
+  - id: 1791
+    value: Einzelgen
+  - id: 1792
+    value: Panel
+  - id: 1793
+    value: Exom
+  to: Bisherige Diagnostik
+  type: multiple_select
+- to: Kommentar
+  type: long_text
+- select_options:
+  - id: 1794
+    value: HSA Vorbereitung
+  - id: 1795
+    value: HSA Gesehen
+  - id: 1796
+    value: Probe zu LB
+  - id: 1797
+    value: Probe bei Varfish
+  - id: 1798
+    value: In Befundung
+  - id: 1799
+    value: Befundmitteilung ausstehend
+  - id: 1800
+    value: Fertig
+  - id: 1801
+    value: Storniert
+  to: Bearbeitungsstatus
+  type: single_select
+- select_options:
+  - id: 1802
+    value: Genom
+  - id: 1803
+    value: Exom
+  - id: 1804
+    value: Beratung
+  to: Falltyp
+  type: single_select
+- to: ICD10
+  type: text
+- to: Erstellungsdatum
+  type: created_on
+- to: HSA Termin
+  type: date
+- link_table: Findings
+  to: Findings
+  type: link_row
+- link_table: Personnel
+  to: First Look
+  type: link_row
+- link_table: Personnel
+  to: Second Look
+  type: link_row
+- link_table: Personnel
+  to: Validator
+  type: link_row
+- link_table: Personnel
+  to: Clinician
+  type: link_row
+- to: SAMS
+  type: formula
+- to: Firstname
+  type: text
+- to: Lastname
+  type: text
+- to: Birthdate
+  type: date
+- to: LB ID
+  type: text
+- to: SAP ID
+  type: text
+- to: Address
+  type: long_text
+- select_options:
+  - id: 1810
+    value: Female
+  - id: 1811
+    value: Male
+  - id: 1812
+    value: Other
+  to: Gender
+  type: single_select
+- to: Pedigree
+  type: long_text
+- to: SODAR
+  type: url
+- to: Varfish
+  type: url
