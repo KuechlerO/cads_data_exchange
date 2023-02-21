@@ -1,3 +1,4 @@
+import re
 import json
 
 import pandas as pd
@@ -20,8 +21,19 @@ tnamse_df = pd.DataFrame.from_records(tnamse_records)
 missing_lb = tnamse_df.loc[tnamse_df['LB ID'] == 'None']
 
 
+LB_ID_INNER = re.compile(r"(\d{2})[-_](\d{4})")
+def matchLbId(lbid1, lbid2):
+    m1 = LB_ID_INNER.search(str(lbid1))
+    m2 = LB_ID_INNER.search(str(lbid2))
+    if not (m1 and m2):
+        return False
+    return (m1.group(1), m1.group(2)) == (m2.group(1), m2.group(2))
+
+
 def match_sample(s, index_entry):
     return (
+        matchLbId(s["LB ID"], index_entry["LB-ID"])
+    ) or (
         s["Lastname"] == index_entry["Fam Name"]
         and
         s["Firstname"] == index_entry["Given Name"]
@@ -38,9 +50,16 @@ STARTING_BATCH = args.batch
 
 persons = [
     {
+        "short": "MZ",
+        "first": "Max Xiaohang",
+        "last": "Zhao",
+        "reports": True,
+        "quota": 2,
+    },
+    {
         "short": "AA",
         "first": "Angela",
-        "last": "Abad",
+        "last": "Abad-Perez",
         "reports": True,
         "quota": 1,
     },
@@ -77,7 +96,7 @@ persons = [
         "first": "Felix",
         "last": "Boschann",
         "reports": True,
-        "quota": 0,
+        "quota": 2,
     },
     {
         "short": "CE",
@@ -98,13 +117,13 @@ persons = [
         "first": "Sarina",
         "last": "Schwartzmann",
         "reports": True,
-        "quota": 1,
+        "quota": 0,
     },
     {
         "short": "MD",
         "first": "Magdalena",
         "last": "Danyel",
-        "reports": True,
+        "reports": False,
         "quota": 0,
     },
 ]
@@ -124,6 +143,14 @@ def matchPerson(first=None, last=None, short=None):
     return None
 
 
+def matchAny(name_string):
+    names = [n.strip() for n in name_string.split("/")]
+    for name in names:
+        if p := matchPerson(last=name):
+            return p
+    return None
+
+
 from random import choice
 
 def select_random_first_look(persons):
@@ -133,7 +160,7 @@ def select_random_first_look(persons):
 def select_first_look(counts, persons, sender):
     if sender:
         sender_count = counts[sender["short"]]
-        if sender_count < sender["quota"]:
+        if sender["reports"]:
             return sender
     reporting_persons_with_open_quota = [
         p for p in persons if p["reports"] and p["quota"] - counts[p["short"]] > 0
@@ -181,13 +208,13 @@ last_seen_batch = STARTING_BATCH
 sodar_df = pd.read_csv("./sodar/s_CADS_Exomes_Diagnostics.txt", sep="\t")
 had_error = False
 for group, data in sodar_df.groupby("Characteristics[Batch]"):
-    if group > STARTING_BATCH:
+    if group > STARTING_BATCH or True:
         last_seen_batch = group
         print(f"Batch", group, file=mail_message)
         for family, famentries in data.groupby("Characteristics[Family]"):
             # check that families are contained in PEL
             index_id = family.split("_", 1)[1].replace("_", "-")
-            pel_entries = table.loc[table["Index-ID"] == index_id]
+            pel_entries = table.loc[table["Index-ID"].apply(lambda i: matchLbId(index_id, i))]
             pel_entry_index = pel_entries.loc[pel_entries["LB-ID"] == index_id]
             if pel_entry_index.shape[0] == 0:
                 print(f"> Could not find {index_id} in LB PEL", file=mail_message)
@@ -198,9 +225,11 @@ for group, data in sodar_df.groupby("Characteristics[Batch]"):
                 if tnamse_entry.shape[0] == 0:
                     print(
                         "> Could not find entry in NAMSE Table",
+                        pel_entry_index["LB-ID"], "|",
                         pel_entry_index["Fam Name"], "|",
                         pel_entry_index["Given Name"],
                         pel_entry_index["Birthdate"],
+                        pel_entry_index["Einsender"],
                         file=mail_message,
                     )
                     had_error = True
@@ -213,19 +242,23 @@ for group, data in sodar_df.groupby("Characteristics[Batch]"):
                     sender = tnamse_entry["Clinician"]
 
                     matched_first = matchPerson(short=first_look)
-                    matched_sender = matchPerson(last=sender)
+                    matched_sender = matchAny(sender)
+                    if matched_sender is None:
+                        matched_sender = {"first": "UNKNOWN", "short": "-1", "reports": False}
+                        sender_str = f"{pel_entry_index['Einsender']} not in TN"
+                    else:
+                        sender_str = f"{matched_sender['first']}"
 
                     if matched_first:
+                        is_new = ""
                         first_look_counts[matched_first["short"]] += 1
                     else:
+                        is_new = "NEU"
                         matched_first = select_first_look(first_look_counts, persons, matched_sender)
                         first_look_counts[matched_first["short"]] += 1
 
-                    print(matched_sender, sender)
-                    print(matched_first, first_look)
-
                     analysis_type = infer_analysis_type(famentries.shape[0], pel_entry_index["Analysetyp"])
-                    print(family, f"({tnamse_entry['Lastname']})", analysis_type, f"({matched_sender['first']})", "->", matched_first["first"], file=mail_message)
+                    print(family, f"({tnamse_entry['Lastname']})", analysis_type, f"({sender_str})", "->", matched_first["first"], is_new, file=mail_message)
 
 if not had_error:
     with CACHE_PATH.open("w") as f:

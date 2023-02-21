@@ -69,7 +69,7 @@ pel:
           - original_name: Genom/Exom
             mapped_name: Falltyp
             formatter: string
-          - original_name: gelöst (ja/ein/UV3)
+          - original_name: gelöst (ja/nein/UV3)
             mapped_name: Status
             formatter: string
           - original_name: FK Befundbesprechung Datum

@@ -2,6 +2,8 @@ import json
 import yaml
 from collections import defaultdict
 
+import requests
+
 
 TABLES = {
     "Cases": 386,
@@ -21,8 +23,6 @@ SCHEMAS = [
 with open(".baserow_token") as tokenfile:
     TOKEN = tokenfile.readline().strip()
 
-
-import requests
 
 def load_personnel():
     resp = requests.get(
@@ -44,18 +44,50 @@ def _get_data(url):
         }
     )
     data = resp.json()
-    if "results" in data:
-        if data["next"]:
-            return data["results"] + _get_data(data["next"])
-        return data["results"]
 
-    raise RuntimeError
+    if "results" not in data:
+        raise RuntimeError
+
+    if data["next"]:
+        return data["results"] + _get_data(data["next"])
+    return data["results"]
+
+
+def format_value(raw_value, field_info):
+    if field_info["type"] == "single_select":
+        if isinstance(raw_value, dict):
+            return raw_value["id"]
+        elif raw_value is None:
+            return raw_value
+        raise RuntimeError(f"malformed single_select {raw_value}")
+    elif field_info["type"] == "multiple_select":
+        if isinstance(raw_value, list):
+            return [
+                v["id"] for v in raw_value
+            ]
+        raise RuntimeError(f"malformed multiple_select {raw_value}")
+    elif field_info["type"] == "link_row":
+        if isinstance(raw_value, list):
+            return [
+                v["id"] for v in raw_value
+            ]
+        raise RuntimeError(f"malformed link_row {raw_value}")
+    else:
+        return raw_value
 
 
 def get_data(table_id):
     """Check a given table for empty keys.
     """
-    return _get_data(f"https://phenotips.charite.de/api/database/rows/table/{table_id}/?user_field_names=true")
+    writable_fields = get_writable_fields(table_id)
+    writable_names = {f['name']: f for f in writable_fields}
+    data = _get_data(f"https://phenotips.charite.de/api/database/rows/table/{table_id}/?user_field_names=true")
+
+    writable_data = {
+        d['id']: {k: format_value(v, writable_names[k]) for k, v in d.items() if k in writable_names} for d in data
+    }
+
+    return writable_data
 
 
 def get_fields(table_id):
@@ -386,11 +418,17 @@ def map_raw_entry(entry):
     }
 
 
+
 if __name__ == "__main__":
 
+    # get tn table
     with open("tnamse.json") as tn:
         entries = json.load(tn)
 
+    # get existing data
+    table_data = {}
+    for name, tid in TABLES.items():
+        table_data[name] = get_data(tid)
 
     ENTRY_CACHE = shelve.open("baserow_seen.shlv")
 

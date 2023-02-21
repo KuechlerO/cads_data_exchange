@@ -65,11 +65,16 @@ msg_build = StringIO()
 print("Sprechstundentermine der nächsten 14 Tage\n", file=msg_build)
 start = datetime.datetime.now()
 end = start + datetime.timedelta(days=14)
+next_appointments = []
 for app in appointments:
     if any(r.endswith(str(max_zhao["Kennummer"])) for r in app.resources):
         if app.date_begin >= start and app.date_end <= end:
-            print(app.date_begin.date(), calendar.day_name[app.date_begin.weekday()], f'{app.date_begin.strftime("%H:%M")}-{app.date_end.strftime("%H:%M")}', file=msg_build)
-            print("  ", app.name, app.info, file=msg_build)
+            next_appointments.append(app)
+
+next_appointments = sorted(next_appointments, key=lambda app: app.date_begin)
+for app in next_appointments:
+    print(app.date_begin.date(), calendar.day_name[app.date_begin.weekday()], f'{app.date_begin.strftime("%H:%M")}-{app.date_end.strftime("%H:%M")}', file=msg_build)
+    print("  ", app.name, app.info, file=msg_build)
 
 mail_string = msg_build.getvalue()
 if mail_string:
