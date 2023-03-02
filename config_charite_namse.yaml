@@ -103,7 +103,7 @@ pel:
             mapped_name: TE an Frau Otto
             formatter: string
 outputs:
-  - path: tnamse.json
+  - path: data/tnamse.json
     output_type: json
     filter:
       type: none

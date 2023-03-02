@@ -28,7 +28,6 @@ for file in args.target_dir.iterdir():
     if not file.is_dir() and (m := DATE_REGEX.search(file.name)):
         filedate = datetime.date.fromisoformat(m.group(0))
         filedelta = TODAY - filedate
-        print(file.name, filedate, filedelta)
 
         if filedelta >= MAX_AGE:
             print(f"Removing old file {file}")
