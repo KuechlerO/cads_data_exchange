@@ -9,4 +9,4 @@ cd "$(dirname "$0")"
 micromamba activate cads_data_exchange
 bash fetch_data.sh
 python ./generate_batch_email.py
-# python ./mdb_to_mail.py
+python ./mdb_to_mail.py

@@ -1,3 +1,3 @@
 #!/bin/bash
 
-python -m pel_extract ./config_charite_namse.yaml
+python ./fetch_baserow_schemas.py schemas

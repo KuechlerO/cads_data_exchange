@@ -12,11 +12,11 @@ fields:
 - to: Position
   type: text
 - select_options:
-  - id: 1769
+  - id: 2998
     value: Sender
-  - id: 1770
+  - id: 2999
     value: Validator
-  - id: 1771
+  - id: 3000
     value: Investigator
   to: Role
   type: multiple_select
@@ -25,5 +25,5 @@ fields:
 - link_table: Cases
   to: Cases
   type: link_row
-id: 390
+id: 582
 name: Personnel

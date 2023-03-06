@@ -58,6 +58,7 @@ for table_name, table_id in tables.items():
                 info["link_table"], = [k for k, v in tables.items() if v == field["link_row_table"]]
             else:
                 print(f"Ignoring link to non-specified table {info['to']}")
+                continue
 
         if info["type"] == "single_select" or info["type"] == "multiple_select":
             info["select_options"] = [

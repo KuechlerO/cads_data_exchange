@@ -1,39 +1,34 @@
+import re
+import datetime
 import json
 import yaml
 from collections import defaultdict
+from typing import List
 
 import requests
+from argparse import ArgumentParser
 
 
-TABLES = {
-    "Cases": 386,
-    "Findings": 389,
-}
-
-def load_schema(table_name):
-    with open(f"schemas/{table_name}.yaml") as file:
-        data = yaml.safe_load(file)
+def load_json(path):
+    with open(path) as file:
+        data = json.load(file)
     return data
 
-
-SCHEMAS = [
-    load_schema(n) for n in TABLES
-]
 
 with open(".baserow_token") as tokenfile:
     TOKEN = tokenfile.readline().strip()
 
 
-def load_personnel():
-    resp = requests.get(
-        "https://phenotips.charite.de/api/database/rows/table/390/?user_field_names=true",
-        headers={
-            "Authorization": f"Token {TOKEN}",
-        }
-    )
-    return resp.json()['results']
+DATA_PATHS = {
+    "tnamse": "./data/tnamse.json",
+    "clinicians": "./data/clinicians.json",
+}
 
-PERSONNEL = load_personnel()
+
+def load_schema(table_name):
+    with open(f"schemas/{table_name}.yaml") as file:
+        data = yaml.safe_load(file)
+    return data
 
 
 def _get_data(url):
@@ -109,158 +104,6 @@ def get_writable_fields(table_id):
     ]
     return writable_fields
 
-
-WRITABLE_FIELDS = {
-    table_id: get_writable_fields(table_id) for table_id in TABLES.values()
-}
-
-IDENTIFIER_FIELDS = ("Lastname", "Firstname", "Birthdate")
-def create_key(entry):
-    return "|".join(entry[k] for k in IDENTIFIER_FIELDS)
-
-
-def get_matches(entries, table_data):
-    matches = {}
-    for entry_id, entry_data in entries:
-        matches[entry_id] = 0
-        for key ,value in table_data.items():
-            entry_value = entry_data.get(key)
-            if value == entry_value:
-                matches[entry_id] += 1
-    return dict(sorted(matches.items(), key=lambda item: item[1], reverse=True))
-
-
-def merge_entries(dicta, dictb):
-    merged_dict = {**dicta}
-    for k, v in dictb.items():
-        if k in merged_dict:
-            if merged_dict[k] in (None, "", [], "None"):
-                merged_dict[k] = v
-            elif merged_dict[k] == v or v in (None, "", [], "None"):
-                pass
-            elif type(merged_dict[k]) is list and type(v) is list and len(merged_dict[k]) == len(v):
-                pass
-            else:
-                print(f"Merge Conflict: {k} - {v} {merged_dict[k]}")
-                merged_dict[k] = v
-        else:
-            merged_dict[k] = v
-    return merged_dict
-
-def match_data(data_by_id, table_datas):
-    merged_entries = [(i, d) for i, d in data_by_id.items()]
-
-    all_matches = {}
-    for ti, table_data in enumerate(table_datas):
-        matches = get_matches(merged_entries, table_data)
-        all_matches[ti] = matches
-
-    # reorder matches by entry_ids
-    matches_by_entry_id = defaultdict(list)
-    for tid, matches in all_matches.items():
-        for eid, match_score in matches.items():
-            matches_by_entry_id[eid].append((tid, match_score))
-    for m in matches_by_entry_id:
-        matches_by_entry_id[m] = sorted(matches_by_entry_id[m], key=lambda i: i[1], reverse=True)
-
-    used_tids = []
-    new_merged_entries = []
-    for entry_id, matches in matches_by_entry_id.items():
-        entry_tid = None
-        for tid, _ in matches:
-            if tid not in used_tids:
-                entry_tid = tid
-                break
-        else:
-            raise RuntimeError("Unmatched existing entry")
-        merged_entry = merge_entries(data_by_id[entry_id], table_datas[entry_tid])
-        used_tids.append(entry_tid)
-        new_merged_entries.append((entry_id, merged_entry))
-
-    for tid in set(all_matches.keys()) - set(used_tids):
-        new_merged_entries.append((None, table_datas[tid]))
-    return new_merged_entries
-
-
-def upsert_entries(table_id, entry_ids, table_datas):
-    data_by_id = {}
-    for entry_id in entry_ids:
-        resp = requests.get(
-            f"https://phenotips.charite.de/api/database/rows/table/{table_id}/{entry_id}/?user_field_names=true",
-            headers={
-                "Authorization": f"Token {TOKEN}",
-            }
-        )
-        resp.raise_for_status()
-        existing_data = {k: v for k, v in resp.json().items() if k in [f['name'] for f in WRITABLE_FIELDS[table_id]]}
-        for key, value in existing_data.items():
-            if type(value) is list and len(value) > 0:
-                existing_data[key] = [v['id'] for v in value]
-            if type(value) is dict:
-                existing_data[key] = value['id']
-        data_by_id[entry_id] = existing_data
-    new_entry_ids = []
-
-    matched_entries = match_data(data_by_id, table_datas)
-    if len(matched_entries) > 1:
-        print(matched_entries)
-        raise RuntimeError("Oh no")
-    for entry_id, merged_entry in matched_entries:
-        merged_entry = {
-            k: v for k, v in merged_entry.items() if k in [f["name"] for f in WRITABLE_FIELDS[table_id]]
-        }
-        print("MERGED", merged_entry)
-        if entry_id:
-            resp = requests.patch(
-                f"https://phenotips.charite.de/api/database/rows/table/{table_id}/{entry_id}/?user_field_names=true",
-                headers={
-                    "Authorization": f"Token {TOKEN}",
-                    "Content-Type": "application/json",
-                },
-                json=merged_entry,
-            )
-            new_entry_ids.append(entry_id)
-        else:
-            resp = requests.post(
-                f"https://phenotips.charite.de/api/database/rows/table/{table_id}/?user_field_names=true",
-                headers={
-                    "Authorization": f"Token {TOKEN}",
-                    "Content-Type": "application/json",
-                },
-                json=merged_entry,
-            )
-            new_entry_ids.append(resp.json()["id"])
-    return new_entry_ids
-
-
-import shelve
-
-def match_person(person_string):
-    person_string_parts = [p.strip() for p in re.split("/| |,|;", person_string) if p]
-    for pers in PERSONNEL:
-        if person_string == pers["Shorthand"]:
-            return [pers["id"]]
-        elif person_string == pers["Lastname"] or pers["Lastname"] in person_string_parts:
-            return [pers["id"]]
-    return []
-
-
-LINKED_FIELDS_ROW = ("Indexpatient", "Members", "Findings")
-def extractLink(entry, field, entry_ids):
-    link_table = field['link_table']
-    if field["to"] in LINKED_FIELDS_ROW:
-        table_id, = [v for k, v in TABLES.items() if k == link_table]
-        link_id = entry_ids[table_id]
-        return link_id
-    elif link_table == "Personnel":
-        if field["to"] != "Validator":
-            p = match_person(entry[field["to"]])
-            if p:
-                return [p]
-            else:
-                return []
-    return None
-
 class FieldNotFoundError(Exception):
     pass
 
@@ -274,37 +117,59 @@ def extractText(entry, field, *_):
     return val
 
 SELECT_MAPPINGS = {
-    "pathogen": "Pathogenic (V)",
-    "homozygot": "Homozygous",
-    "f": "Female",
-    "m": "Male",
-    "?": "Other",
+    "Gender": {
+        "f": "Female",
+        "m": "Male",
+    },
+    "Case Status": {
+        "ja": "Solved",
+        "Ja": "Solved",
+        "UV3": "VUS",
+        "nein": "Unsolved",
+        "Nein": "Unsolved",
+        "kein Ordner": "Invalid",
+        "offen": "Active",
+    },
+    "Zygosity": {
+        "homozygot": "Homozygous",
+    },
+    "GENERIC": {
+        "pathogen": "Pathogenic (V)",
+        "?": "Other",
+    },
 }
 
 def extractSelect(entry, field, *_):
     if field['to'] in ('Bearbeitungsstatus', 'ACMG Classification', 'Zygosity'):
-        raise FieldNotFoundError
+        raise FieldNotFoundError(f"non supported field {field['to']}")
     raw_value = entry[field["to"]]
 
     options = field["select_options"]
     if raw_value is None or raw_value == "None" and field["to"] == "Falltyp":
-        raise FieldNotFoundError
-    if raw_value in SELECT_MAPPINGS:
-        raw_value = SELECT_MAPPINGS[raw_value]
+        raise FieldNotFoundError(f"Value is {raw_value} and thus ignored")
+    raw_value = raw_value.strip()
+
+    if field["to"] in SELECT_MAPPINGS:
+        field_mappings = SELECT_MAPPINGS[field["to"]]
+        if raw_value in field_mappings:
+            raw_value = field_mappings[raw_value]
+        elif raw_value in SELECT_MAPPINGS["GENERIC"]:
+            raw_value = SELECT_MAPPINGS["GENERIC"][raw_value]
+    else:
+        if raw_value in SELECT_MAPPINGS["GENERIC"]:
+            raw_value = SELECT_MAPPINGS["GENERIC"][raw_value]
+
     for option in options:
         if option["value"] == raw_value:
             return option["id"]
     raise KeyError(f"Could not find {raw_value} for {field['to']}")
 
-import datetime
-import re
-
 def extractDate(entry, field, *_):
     if field['to'] in ('Datum Labor', "HSA Termin"):
-        raise FieldNotFoundError
+        raise FieldNotFoundError(f"Ignored field: {field['to']}")
     raw_value = entry[field['to']]
     if raw_value is None or raw_value == "None" or re.search('[a-zA-Z]', raw_value):
-        raise FieldNotFoundError
+        raise FieldNotFoundError(f"Ignored value {raw_value} for field {field['to']}")
     if raw_value.startswith("("):
         raw_value = raw_value.split(",")[0].strip("('")
     d = datetime.datetime.strptime(raw_value, "%d.%m.%Y")
@@ -323,10 +188,10 @@ def extractMultiSelect(entry, field, *_):
     if dest_field == "Bisherige Diagnostik":
         select_values = []
         has_basis = entry["Basisdiagnostik"]
-        if has_basis is None or has_basis == "None":
+        if has_basis is None or has_basis in ("None", "nein", "unklar"):
             has_basis = False
         panelnames = entry["Paneldiagnostik"]
-        if panelnames is None or panelnames == "None":
+        if panelnames is None or panelnames in ("None", "nein"):
             panelnames = False
         select_options = field["select_options"]
         if has_basis:
@@ -338,110 +203,248 @@ def extractMultiSelect(entry, field, *_):
     else:
         raise RuntimeError(f"{dest_field} multiselect not supported")
 
-HANDLERS = {
-    "link_row": extractLink,
-    "text": extractText,
-    "long_text": extractText,
-    "single_select": extractSelect,
-    "date": extractDate,
-    "boolean": extractBoolean,
-    "multiple_select": extractMultiSelect,
-}
+LINKED_FIELDS_ROW = ("Indexpatient", "Members", "Findings")
 
-def extract_data(entry, schema):
-    mapped_entry = {}
-    for field in schema["fields"]:
-        field_type = field["type"]
-        if field_type == "link_row" and field["link_table"] == "Personnel":
-            mapped_entry[field["to"]] = match_person(entry.get(field["to"], ""))
-        if field_type in ("formula", "created_on", "url", "link_row"):
-            continue
-        if field_type in HANDLERS:
-            try:
-                result_value = HANDLERS[field_type](entry, field)
-            except FieldNotFoundError as err:
-                print(err)
-                continue
-        else:
-            raise RuntimeError(f"Unknown type {field_type}")
-        mapped_entry[field["to"]] = result_value
-    return mapped_entry
+def case_entries_equal(local, other):
+    if other is None:
+        return False
 
-def split_findings(entry):
-    var_fields = [{
-        k.split("|")[-1]: v for k, v in entry.items()
-        if k.startswith(f"V|{i}")
-    } for i in range(1, 4)]
-    var_fields[0]["ResultType"] = "Main"
-    var_fields[1]["ResultType"] = "Incidental"
-    var_fields[2]["ResultType"] = "Research"
-    # prune empty values
-    var_fields = [v for v in [
-        {kk: vv for kk, vv in v.items() if vv} for v in var_fields
-    ] if len(v) > 1]
-    print("SplitFinding", len(var_fields))
-
-    return var_fields
-
-
-def extract_table_data(entry, schema):
-    if schema["name"] == "Findings":
-        finding_entries = split_findings(entry)
-        datas = [
-            extract_data(e, schema) for e in finding_entries
-        ]
-        return datas
+    mismatches = {}
+    for key, value in local.items():
+        other_value = other[key]
+        if other_value != value:
+            mismatches[key] = (value, other_value)
+    if mismatches:
+        print(mismatches)
+        return False
     else:
-        return [extract_data(entry, schema)]
+        return True
+
+class BaserowContext:
+    def __init__(self, tables):
+        self._tables = tables
+        self._persons = load_json(DATA_PATHS["clinicians"])
+        self._schemas = [load_schema(n) for n in tables]
+        self._handlers = {
+            "link_row": self.extractLink,
+            "text": extractText,
+            "long_text": extractText,
+            "single_select": extractSelect,
+            "date": extractDate,
+            "boolean": extractBoolean,
+            "multiple_select": extractMultiSelect,
+        }
+        self._writable = {
+            table_id: get_writable_fields(table_id) for table_id in self._tables.values()
+        }
+
+    def match_person(self, person_string: str) -> List[int]:
+        person_string_parts = [p.strip() for p in re.split("/| |,|;", person_string) if p]
+        for pers in self._persons:
+            if person_string == pers["Shorthand"]:
+                return [pers["id"]]
+            elif person_string == pers["Lastname"] or pers["Lastname"] in person_string_parts:
+                return [pers["id"]]
+        return []
+
+    def extractLink(self, entry, field, entry_ids):
+        link_table = field['link_table']
+        if field["to"] in LINKED_FIELDS_ROW:
+            table_id, = [v for k, v in self._tables.items() if k == link_table]
+            link_id = entry_ids[table_id]
+            return link_id
+        elif link_table == "Personnel":
+            if field["to"] != "Validator":
+                p = self.match_person(entry[field["to"]])
+                if p:
+                    return [p]
+                else:
+                    return []
+        return None
+
+    def get_existing_data(self) -> dict:
+        table_data = {}
+        for name, tid in self._tables.items():
+            table_data[name] = get_data(tid)
+        return table_data
+
+    def split_findings(self, entry):
+        var_fields = [{
+            k.split("|")[-1]: v for k, v in entry.items()
+            if k.startswith(f"V|{i}")
+        } for i in range(1, 4)]
+        var_fields[0]["ResultType"] = "Main"
+        var_fields[1]["ResultType"] = "Incidental"
+        var_fields[2]["ResultType"] = "Research"
+        # prune empty values
+        var_fields = [v for v in [
+            {kk: vv for kk, vv in v.items() if vv} for v in var_fields
+        ] if len(v) > 1]
+        return var_fields
+
+    def extract_data(self, entry, schema):
+        mapped_entry = {}
+        for field in schema["fields"]:
+            field_type = field["type"]
+            if field_type == "link_row" and field["link_table"] == "Personnel":
+                mapped_entry[field["to"]] = self.match_person(entry.get(field["to"], ""))
+            if field_type in ("formula", "created_on", "url", "link_row"):
+                continue
+            if field_type in self._handlers:
+                try:
+                    result_value = self._handlers[field_type](entry, field)
+                except FieldNotFoundError as err:
+                    print(f"FieldNotFound:", err)
+                    continue
+            else:
+                raise RuntimeError(f"Unknown type {field_type}")
+            mapped_entry[field["to"]] = result_value
+        return mapped_entry
 
 
-def upsert_data(entry, entry_ids):
-    # insertion order in order of tables in SCHEMA
-    for schema in SCHEMAS:
-        table_data = entry[schema["id"]]
+    def extract_table_data(self, entry, schema):
+        if schema["name"] == "Findings":
+            finding_entries = self.split_findings(entry)
+            return [
+                self.extract_data(e, schema) for e in finding_entries
+            ]
+        else:
+            return [self.extract_data(entry, schema)]
+
+
+    def map_entry(self, entry) -> dict:
+        mapped_entry = {
+            schema["id"]: self.extract_table_data(entry, schema)
+            for schema in self._schemas
+        }
+        return mapped_entry
+
+
+    def upsert_data(self, entry, case_id, existing_case_entry=None):
+        # insertion order in order of tables in SCHEMA
+        case_table_id = self._tables["Cases"]
+        findings_table_id = self._tables["Findings"]
+
+        case_data, = entry[case_table_id]
+        if existing_case_entry:
+            case_data["Findings"] = existing_case_entry["Findings"]
+        else:
+            case_data["Findings"] = []
+
+        if not case_entries_equal(case_data, existing_case_entry):
+            if not existing_case_entry:
+                resp = requests.post(
+                    f"https://phenotips.charite.de/api/database/rows/table/{case_table_id}/?user_field_names=true",
+                    headers={
+                        "Authorization": f"Token {TOKEN}",
+                        "Content-Type": "application/json",
+                    },
+                    json=case_data,
+                )
+                actual_case_id = resp.json()["id"]
+                assert case_id == actual_case_id, "Case ID should never mismatch"
+            else:
+                resp = requests.patch(
+                    f"https://phenotips.charite.de/api/database/rows/table/{case_table_id}/{case_id}/?user_field_names=true",
+                    headers={
+                        "Authorization": f"Token {TOKEN}",
+                        "Content-Type": "application/json",
+                    },
+                    json=case_data,
+                )
+
+
+        findings_data = entry[findings_table_id]
+        schema, = [s for s in self._schemas if s["name"] == "Findings"]
         schema_links = [
-            {"link_table_id": TABLES[field["link_table"]], **field} for field in schema["fields"] if field["type"] == "link_row" and field["link_table"] in TABLES
+            {"link_table_id": self._tables[field["link_table"]], **field} for field in schema["fields"] if field["type"] == "link_row" and field["link_table"] in self._tables
         ]
+
         for link_field in schema_links:
-            link_ids = entry_ids.get(link_field["link_table_id"], [])
-            entry[link_field["to"]] = link_ids
+            if link_field["link_table"] == "Cases":
+                for finding in findings_data:
+                    finding[link_field["to"]] = [case_id]
 
-        ids = upsert_entries(schema["id"], entry_ids[schema["id"]], table_data)
-        entry_ids[schema["id"]] = ids
-    return entry_ids
+        for i, finding in enumerate(findings_data):
+            existing_id, = case_data["Findings"][i:i+1] or [None]
+            # ids = upsert_entries(schema["id"], entry_ids[schema["id"]], table_data)
+            if existing_id is None:
+                resp = requests.post(
+                    f"https://phenotips.charite.de/api/database/rows/table/{findings_table_id}/?user_field_names=true",
+                    headers={
+                        "Authorization": f"Token {TOKEN}",
+                        "Content-Type": "application/json",
+                    },
+                    json=finding,
+                )
+                resp.raise_for_status()
+            else:
+                resp = requests.patch(
+                    f"https://phenotips.charite.de/api/database/rows/table/{findings_table_id}/{existing_id}/?user_field_names=true",
+                    headers={
+                        "Authorization": f"Token {TOKEN}",
+                        "Content-Type": "application/json",
+                    },
+                    json=finding,
+                )
 
 
-def map_raw_entry(entry):
-    return {
-        schema["id"]: extract_table_data(entry, schema)
-        for schema in SCHEMAS
+def add_vertrag(tn_data):
+    for entry in tn_data:
+        sap_entry = entry["SAP ID"]
+        if sap_entry is None:
+            entry["SAP ID"] = None
+            entry["Vertrag"] = None
+            continue
+
+        sap_entry = sap_entry.strip()
+        if sap_entry.isnumeric():
+            entry["SAP ID"] = sap_entry
+            entry["Vertrag"] = "Selektivvertrag"
+        elif sap_entry:
+            entry["SAP ID"] = None
+            entry["Vertrag"] = sap_entry
+        else:
+            raise RuntimeError(f"{sap_entry} is something wrong")
+    return tn_data
+
+
+def main(case_table_id, findings_table_id):
+    tables = {
+        "Cases": case_table_id,
+        "Findings": findings_table_id,
     }
 
+    ctx = BaserowContext(tables)
+
+    tn_data = load_json(DATA_PATHS["tnamse"])
+
+    tn_data = add_vertrag(tn_data)
+
+    baserow_data = ctx.get_existing_data()
+    baserow_case_data = baserow_data["Cases"]
+    n = 0
+    for entry in tn_data:
+        print(entry)
+        data = ctx.map_entry(entry)
+        entry_key = entry["Medgen ID"]
+
+        if m := re.match("SV-(\d+)", entry_key):
+            case_id = int(m.group(1))
+            existing_case_entry = baserow_case_data.get(case_id, None)
+            ctx.upsert_data(data, case_id, existing_case_entry)
+        else:
+            raise RuntimeError(f"Invalid entry key {entry_key} format should be SV-<NUMBER>")
+        # if n >= 20:
+        #     break
+        n += 1
 
 
 if __name__ == "__main__":
+    parser = ArgumentParser()
 
-    # get tn table
-    with open("tnamse.json") as tn:
-        entries = json.load(tn)
+    parser.add_argument("--case_table_id", type=int, default=579)
+    parser.add_argument("--findings_table_id", type=int, default=581)
 
-    # get existing data
-    table_data = {}
-    for name, tid in TABLES.items():
-        table_data[name] = get_data(tid)
-
-    ENTRY_CACHE = shelve.open("baserow_seen.shlv")
-
-
-    # split into two-step process
-    # split into separate dicts
-    # match against existing entries in database
-    # add ids
-    for entry in entries:
-        data = map_raw_entry(entry)
-        entry_key = create_key(entry)
-        entry_ids = ENTRY_CACHE.get(entry_key, {})
-        new_ids = upsert_data(data, entry_ids)
-        ENTRY_CACHE[entry_key] = new_ids
-
-    ENTRY_CACHE.close()
+    args = parser.parse_args()
+    main(args.case_table_id, args.findings_table_id)

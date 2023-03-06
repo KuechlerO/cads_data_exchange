@@ -6,15 +6,15 @@ fields:
 - to: NM Transcript
   type: text
 - select_options:
-  - id: 1772
+  - id: 2985
     value: Pathogenic (V)
-  - id: 1773
+  - id: 2986
     value: Likely Pathogenic (IV)
-  - id: 1774
+  - id: 2987
     value: Uncertain Significance (III)
-  - id: 1775
+  - id: 2988
     value: Likely Benign (II)
-  - id: 1776
+  - id: 2989
     value: Benign (I)
   to: ACMG Classification
   type: single_select
@@ -25,24 +25,24 @@ fields:
 - to: HGMD-ID
   type: text
 - select_options:
-  - id: 1777
+  - id: 2990
     value: Heterozygous
-  - id: 1778
+  - id: 2991
     value: Homozygous
-  - id: 1779
+  - id: 2992
     value: Hemizygous
-  - id: 1780
+  - id: 2993
     value: Homoplasmic
-  - id: 1781
+  - id: 2994
     value: Heteroplasmic
   to: Zygosity
   type: single_select
 - select_options:
-  - id: 1782
+  - id: 2995
     value: Main
-  - id: 1783
+  - id: 2996
     value: Incidental
-  - id: 1784
+  - id: 2997
     value: Research
   to: ResultType
   type: single_select
@@ -51,5 +51,5 @@ fields:
 - link_table: Cases
   to: Cases
   type: link_row
-id: 389
+id: 581
 name: Findings

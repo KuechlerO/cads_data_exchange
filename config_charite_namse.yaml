@@ -6,6 +6,8 @@ pel:
           mappings:
           - original_name: Kommentar
             mapped_name: Kommentar
+          - original_name: Medgen ID
+            required: True
           - original_name: Second Look
             mapped_name: Second Look
             formatter: name
@@ -17,7 +19,7 @@ pel:
             formatter: lbid
           - original_name: SAP-Nummer
             mapped_name: SAP ID
-            formatter: numeric
+            formatter: string
           - original_name: Name
             mapped_name: Lastname
             formatter: name
@@ -26,6 +28,8 @@ pel:
             mapped_name: Firstname
             formatter: name
             required: True
+          - original_name: Trio/Single/Duo
+            mapped_name: Analysezahl
           - original_name: Geburtsdatum
             mapped_name: Birthdate
             formatter: date
@@ -70,7 +74,7 @@ pel:
             mapped_name: Falltyp
             formatter: string
           - original_name: gelöst (ja/nein/UV3)
-            mapped_name: Status
+            mapped_name: Case Status
             formatter: string
           - original_name: FK Befundbesprechung Datum
             mapped_name: Datum Befundkonferenz
@@ -99,15 +103,19 @@ pel:
           - original_name: Forschungsrelevanterbefund
             mapped_name: V|3|Mutation
             formatter: string
-          - original_name: TE an Frau Otto geschickt
-            mapped_name: TE an Frau Otto
+          - original_name: Teilnahmeerklärung
+            mapped_name: Teilnahmeerklärung
             formatter: string
+          - original_name: Transfer an Frau Otto
+            mapped_name: Transfer an Frau Otto
+            formatter: date
 outputs:
   - path: data/tnamse.json
     output_type: json
     filter:
       type: none
     mappings:
+    - original_name: Medgen ID
     - original_name: Kommentar
     - original_name: Second Look
       formatter: name
@@ -116,7 +124,7 @@ outputs:
     - original_name: LB ID
       formatter: lbid
     - original_name: SAP ID
-      formatter: numeric
+      formatter: string
     - original_name: Lastname
       formatter: name
     - original_name: Firstname
@@ -147,9 +155,10 @@ outputs:
       formatter: string
     - original_name: Datum Fallkonferenz
       formatter: date
+    - original_name: Analysezahl
     - original_name: Falltyp
       formatter: string
-    - original_name: Status
+    - original_name: Case Status
       formatter: string
     - original_name: Datum Befundkonferenz
       formatter: date
@@ -169,5 +178,7 @@ outputs:
       formatter: string
     - original_name: V|3|Mutation
       formatter: string
-    - original_name: TE an Frau Otto
+    - original_name: Teilnahmeerklärung
       formatter: string
+    - original_name: Transfer an Frau Otto
+      formatter: date

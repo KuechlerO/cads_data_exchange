@@ -1,9 +1,6 @@
 fields:
-- to: Title
+- to: Medgen ID
   type: formula
-- link_table: PatientsRelatives
-  to: AdditionalMembers
-  type: link_row
 - to: Datum Einschluss
   type: date
 - to: Datum Fallkonferenz
@@ -24,57 +21,41 @@ fields:
   type: boolean
 - to: Gestaltmatcher-EV
   type: boolean
-- to: Teilnahmeerklärung
-  type: boolean
-- to: TE an Frau Otto
-  type: boolean
 - select_options:
-  - id: 1788
+  - id: 3027
+    value: ja
+  - id: 3028
+    value: keine LB-Nummer
+  - id: 3032
+    value: fehlt
+  to: Teilnahmeerklärung
+  type: single_select
+- select_options:
+  - id: 2958
     value: Karyotyping
-  - id: 1789
+  - id: 2959
     value: Array-CGH
-  - id: 1790
+  - id: 2960
     value: Fragile X
-  - id: 1791
+  - id: 2961
     value: Einzelgen
-  - id: 1792
+  - id: 2962
     value: Panel
-  - id: 1793
+  - id: 2963
     value: Exom
   to: Bisherige Diagnostik
   type: multiple_select
 - to: Kommentar
   type: long_text
 - select_options:
-  - id: 1794
-    value: HSA Vorbereitung
-  - id: 1795
-    value: HSA Gesehen
-  - id: 1796
-    value: Probe zu LB
-  - id: 1797
-    value: Probe bei Varfish
-  - id: 1798
-    value: In Befundung
-  - id: 1799
-    value: Befundmitteilung ausstehend
-  - id: 1800
-    value: Fertig
-  - id: 1801
-    value: Storniert
-  to: Bearbeitungsstatus
-  type: single_select
-- select_options:
-  - id: 1802
+  - id: 2972
     value: Genom
-  - id: 1803
+  - id: 2973
     value: Exom
-  - id: 1804
+  - id: 2974
     value: Beratung
   to: Falltyp
   type: single_select
-- to: ICD10
-  type: text
 - link_table: Findings
   to: Findings
   type: link_row
@@ -105,11 +86,11 @@ fields:
 - to: Address
   type: long_text
 - select_options:
-  - id: 1810
+  - id: 2975
     value: Female
-  - id: 1811
+  - id: 2976
     value: Male
-  - id: 1812
+  - id: 2977
     value: Other
   to: Gender
   type: single_select
@@ -119,7 +100,42 @@ fields:
   type: url
 - to: Varfish
   type: url
-- to: SV ID
-  type: formula
-id: 386
+- select_options:
+  - id: 3001
+    value: Solved
+  - id: 3002
+    value: Unsolved
+  - id: 3003
+    value: VUS
+  - id: 3004
+    value: Active
+  - id: 3005
+    value: Invalid
+  - id: 3010
+    value: Storniert
+  to: Case Status
+  type: single_select
+- select_options:
+  - id: 3006
+    value: Single
+  - id: 3007
+    value: Duo
+  - id: 3008
+    value: Trio
+  - id: 3009
+    value: Quattro
+  to: Analysezahl
+  type: single_select
+- to: Transfer an Frau Otto
+  type: date
+- select_options:
+  - id: 3029
+    value: Selektivvertrag
+  - id: 3030
+    value: Station
+  - id: 3031
+    value: Privat
+  to: Vertrag
+  type: single_select
+id: 579
 name: Cases
