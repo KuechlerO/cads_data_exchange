@@ -3,3 +3,4 @@
 .baserow_token
 /data
 .env
+__pycache__

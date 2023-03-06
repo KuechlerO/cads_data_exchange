@@ -1,5 +1,7 @@
 import requests
 import yaml
+from pathlib import Path
+from argparse import ArgumentParser
 
 with open("./.baserow_token") as tokenfile:
     token = tokenfile.readline().strip()
@@ -15,15 +17,28 @@ def get_fields(table_id):
     return resp.json()
 
 tables = {
-    "Cases": 386,
-    "PatientsRelatives": 387,
-    "Findings": 389,
-    "Personnel": 390,
+    "Cases": 579,
+    "Findings": 581,
+    "Personnel": 582,
 }
 
-from pathlib import Path
-schema_output_dir = Path("schemas")
+parser = ArgumentParser()
+
+parser.add_argument("schema_path", type=Path, default="schemas")
+
+for tname, tid in tables.items():
+    mapped_name = f"{tname}_id".lower()
+    parser.add_argument(f"--{mapped_name}", default=tid, type=int)
+
+args = parser.parse_args()
+
+vargs = vars(args)
+
+schema_output_dir = args.schema_path
 schema_output_dir.mkdir(exist_ok=True)
+
+for tname in tables:
+    tables[tname] = vargs[f"{tname}_id".lower()]
 
 for table_name, table_id in tables.items():
     fields = get_fields(table_id)
@@ -38,7 +53,12 @@ for table_name, table_id in tables.items():
             "type": field["type"],
         }
         if info["type"] == "link_row":
-            info["link_table"], = [k for k, v in tables.items() if v == field["link_row_table"]]
+            table_ids = [k for k, v in tables.items() if v == field["link_row_table"]]
+            if len(table_ids) == 1:
+                info["link_table"], = [k for k, v in tables.items() if v == field["link_row_table"]]
+            else:
+                print(f"Ignoring link to non-specified table {info['to']}")
+
         if info["type"] == "single_select" or info["type"] == "multiple_select":
             info["select_options"] = [
                 {"id": s["id"], "value": s["value"]}
