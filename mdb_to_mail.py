@@ -187,7 +187,8 @@ def match_patient_name(n1, n2):
     elif lastname_matches and not (firstname_exists and dob_exists):
         return True
     elif dob_matches:
-        print(n1, n2)
+        ...
+        # print(n1, n2)
     return False
 
 
@@ -302,7 +303,8 @@ for app in hsa_appointments:
 
 new_entries = len(new_entry_lines)
 updated_entries = len(updated_entry_lines)
-print(f"Terminland Baserow Sync: {new_entries=} {updated_entries=}")
+if new_entry_lines or updated_entries:
+    print(f"Terminland Baserow Sync: {new_entries=} {updated_entries=}")
 if len(new_entry_lines):
     print("Created new entries:")
     print("\n".join(new_entry_lines))
