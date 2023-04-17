@@ -6,6 +6,13 @@ import pandas as pd
 import datetime
 from pathlib import Path
 
+from baserow_utils import BaserowApi
+from constants import CASE_TABLE_ID, PERSONNEL_TABLE_ID
+
+
+BR = BaserowApi(token_path=".baserow_token")
+
+
 def load_json(path, cast=True):
     with open(str(path)) as jsfile:
         data = json.load(jsfile)
@@ -33,7 +40,6 @@ def get_second_latest_path(path):
     if len(paths_by_date) >= 2:
         return paths_by_date[1][1]
     return None
-
 
 def get_latest_path(path):
     paths_by_date = get_paths_by_date(path)
@@ -87,13 +93,6 @@ def matchSample(s, index_entry):
         s["Birthdate"] == index_entry["Birthdate"]
     )
 
-def get_reporting_clinicians(clinicians):
-    return [
-        c
-        for c in clinicians
-        if c["Active"] and any(r["value"] == "Investigator" for r in c["Role"])
-    ]
-
 
 def match_last_name(name, other):
     if name == other:
@@ -141,7 +140,7 @@ def infer_analysis_type(num_entries, analysis_type):
     return f"{count_name}-{analysis_type}"
 
 
-def gather_info(fam_id, tnamse_data, lb_data, varfish_data):
+def gather_info(fam_id, cases_data, lb_data, varfish_data):
     varfish_fam = varfish_data.loc[varfish_data["name"].apply(lambda n: matchLbId(fam_id, n))].to_dict("records")
 
     lb_fam = lb_data.loc[lb_data["Index-ID"].apply(lambda n: matchLbId(fam_id, n))].to_dict("records")
@@ -160,7 +159,8 @@ def gather_info(fam_id, tnamse_data, lb_data, varfish_data):
             "LB-ID": fam_id,
         }
 
-    tnamse_index_found = tnamse_data.loc[tnamse_data.apply(lambda s: matchSample(s, lb_index), axis=1)].to_dict("records")
+    cases_index_found = [(eid, edata) for eid, edata in cases_data.items() if matchSample(edata, lb_index)]
+    # cases_index_found = cases_data.loc[cases_data.apply(lambda s: matchSample(s, lb_index), axis=1)].to_dict("records")
 
     lbid_fmt = fam_id
     firstname_fmt = ""
@@ -169,13 +169,15 @@ def gather_info(fam_id, tnamse_data, lb_data, varfish_data):
     sender_fmt = ""
     firstlook_fmt = ""
     errors = []
+    entry_id = None
+    tnamse_index = None
     if lb_index:
         firstname_fmt = lb_index["Given Name"]
         lastname_fmt = lb_index["Fam Name"]
         birthdate_fmt = lb_index["Birthdate"]
         lbid_fmt = lb_index["LB-ID"]
-    if tnamse_index_found:
-        tnamse_index, = tnamse_index_found
+    if cases_index_found:
+        (entry_id, tnamse_index), = cases_index_found
         if lb_index:
             if lb_index["Given Name"] != tnamse_index["Firstname"]:
                 firstname_fmt = f"TN({tnamse_index['Firstname']})|LB({lb_index['Given Name']})"
@@ -203,7 +205,10 @@ def gather_info(fam_id, tnamse_data, lb_data, varfish_data):
         "errors": errors,
         "varfish_found": bool(varfish_fam),
         "lb_found": bool(lb_index),
-        "tnamse_found": bool(tnamse_index_found),
+        "varfish_data": varfish_fam[0] if varfish_fam else None,
+        "lb_data": lb_index,
+        "baserow_data": tnamse_index,
+        "baserow_id": entry_id,
     }
 
 
@@ -218,13 +223,69 @@ def format_info_line(info):
         notifications.append("not in varfish")
     if not info["lb_found"]:
         notifications.append("not in LB PEL")
-    if not info["tnamse_found"]:
-        notifications.append("not in TNAMSE Table")
+    if info["baserow_id"] is None:
+        notifications.append("not in Baserow")
     notification = ",".join(notifications)
 
     error = ",".join(f"{n}({err})" for n, err in info["errors"])
     info_line = f"{info['fam_id']}({info['lastname']}) Einsender: {info['sender']} First Look: {firstlook_fmt} - {notification} - {error}"
     return info_line
+
+
+VARFISH_STATUS_TO_BASEROW = {
+    "closed-solved": "Solved",
+    "closed-uncertain": "VUS",
+    "closed-unsolved": "Unsolved",
+    "active": "Active",
+    "initial": "Varfish Initial",
+}
+
+STATUS_ORDER = [
+    "Invalid",
+    "Storniert",
+    "Varfish Initial",
+    "Active",
+    "Unsolved",
+    "VUS",
+    "Solved",
+]
+
+def status_newer(new_status, old_status):
+    """Check if the new status is higher rank than old one."""
+    if old_status is None:
+        return True
+    new_index = STATUS_ORDER.index(new_status)
+    old_index = STATUS_ORDER.index(old_status)
+    return new_index > old_index
+
+def update_baserow(data):
+    varfish_data = data["varfish_data"]
+    lb_data = data["lb_data"]
+
+    baserow_data = data["baserow_data"]
+    changed_fields = []
+    if baserow_data["Datum Labor"] is None and lb_data["ProbenDate"] is not None:
+        baserow_data["Datum Labor"] = datetime.datetime.strptime(lb_data["ProbenDate"], "%d.%M.%Y").date().isoformat()
+        changed_fields.append("Datum Labor")
+
+    if baserow_data["Varfish"] in (None, "") and varfish_data is not None:
+        baserow_data["Varfish"] = f"https://varfish.bihealth.org/variants/f2acceb7-067d-41a4-8e39-236c022678f1/case/{varfish_data['sodar_uuid']}"
+        changed_fields.append("Varfish")
+
+    if baserow_data["LB ID"] in (None, "") and data["lb_id"]:
+        baserow_data["LB ID"] = data["lb_id"]
+        changed_fields.append("LB ID")
+
+    if varfish_data is not None:
+        cur_status = baserow_data["Case Status"]
+        varfish_conv_status = VARFISH_STATUS_TO_BASEROW[varfish_data["status"]]
+        if status_newer(varfish_conv_status, cur_status):
+            baserow_data["Case Status"] = varfish_conv_status
+            changed_fields.append("Case Status")
+
+    if changed_fields:
+        print(f"Updating baserow entry {data['baserow_id']} {baserow_data['LB ID']} Fields: {','.join(changed_fields)}")
+        BR.add_data(CASE_TABLE_ID, baserow_data, row_id=data["baserow_id"])
 
 
 def format_message(output_per_batch, padding=""):
@@ -254,13 +315,13 @@ def send_email(title, message_text, recipients):
 
 def main():
     paths = {
-        "tnamse": "data/tnamse.json",
+        "cases": "data/cases.json",
         "lb": "data/lb_pel.tsv",
         "sodar": "data/sodar/s_CADS_Exomes_Diagnostics.txt",
         "varfish": "data/varfish",
         "clinicians": "data/clinicians.json",
     }
-    tnamse_data = load_json(paths["tnamse"])
+    cases_data = load_json(paths["cases"], cast=False)
     lb_data = load_tsv(paths["lb"])
     sodar_data = load_tsv(paths["sodar"])
 
@@ -271,14 +332,13 @@ def main():
         return 0
     print("New varfish entries: ", ", ".join(new_varfish_names))
 
-    all_clinicians = load_json(paths["clinicians"], cast=False)
-    reporting_clinicians = get_reporting_clinicians(all_clinicians)
-
     output_per_batch = {}
     for batch_id, sodar_batch in sodar_data.groupby("Characteristics[Batch]"):
         output_per_batch[batch_id] = []
         for fam_id, sodar_fam in sodar_batch.groupby("Characteristics[Family]"):
-            info = gather_info(fam_id, tnamse_data, lb_data, varfish_data)
+            info = gather_info(fam_id, cases_data, lb_data, varfish_data)
+            if info["baserow_id"] is not None:
+                update_baserow(info)
             formatted = format_info_line(info)
             output_per_batch[batch_id].append(formatted)
 

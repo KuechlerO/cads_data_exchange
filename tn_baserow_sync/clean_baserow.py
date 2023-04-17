@@ -113,6 +113,9 @@ def check_table_duplicates(table_id, identifying_keys):
     return duplicate_ids
 
 if __name__ == "__main__":
+    findings = get_data(389)
+    cases = get_data(386)
+    delete_entries(386, [f["id"] for f in cases])
     dup_ids = check_table_duplicates(386, ["Lastname", "Firstname", "Birthdate"])
     if dup_ids:
         delete_entries(386, dup_ids)

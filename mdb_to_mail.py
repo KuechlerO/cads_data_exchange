@@ -125,7 +125,11 @@ def extract_patient_name(name_text):
     dob = None
     if m := re.search(r"\d{2}.\d{2}.\d{4}", name_text):
         name = name_text[:m.start()]
-        dob = m.group(0)
+        dob = datetime.datetime.strptime(m.group(0), "%d.%M.%Y").date()
+
+    if m := re.search(r"\d{2}.\d{2}.\d{2}", name_text):
+        name = name_text[:m.start()]
+        dob = datetime.datetime.strptime(m.group(0), "%d.%M.%y").date()
 
     name = name.strip(", ")
     if "," in name:
@@ -133,9 +137,6 @@ def extract_patient_name(name_text):
     else:
         lastname = name
         firstname = None
-
-    if dob is not None:
-        dob = datetime.datetime.strptime(dob, "%d.%M.%Y").date()
 
     if firstname:
         firstname = firstname.strip()
@@ -197,6 +198,14 @@ def get_responsible_physician(active_doctors, app):
         doctor_id = f"D{doctor['Kennummer']}"
         if doctor_id in app.resources:
             return doctor
+
+    # match by color if we can't find the person id, this might happen if users
+    # manually set the color to match the person
+    app_color = app.raw["Farb_Id"]
+    for doctor in active_doctors:
+        if doctor["Farb_Id"] == app_color:
+            return doctor
+
     return None
 
 
@@ -219,8 +228,13 @@ def get_empty_rows(existing_case_data):
 
 def update_entry(br, app, matched_entry_id, existing_data):
     doctor = get_responsible_physician(active_doctors, app)
-    matched_doctor_id = get_baserow_physician_id(doctor, personnel_data)
+    if doctor is not None:
+        matched_doctor_id = get_baserow_physician_id(doctor, personnel_data)
+    else:
+        matched_doctor_id = None
+
     name_info = extract_patient_name(app.name)
+    fmt_date = app.date_begin.date().isoformat()
 
     updated_fields = []
     if existing_data["Firstname"] in (None, ""):
@@ -241,7 +255,7 @@ def update_entry(br, app, matched_entry_id, existing_data):
             updated_fields.append("Clinician")
     if existing_data["Datum Einschluss"] in (None, ""):
         if app.date_begin is not None:
-            existing_data["Datum Einschluss"] = app.date_begin.date().isoformat()
+            existing_data["Datum Einschluss"] = fmt_date
             updated_fields.append("Datum Einschluss")
 
     if not updated_fields:
@@ -250,12 +264,15 @@ def update_entry(br, app, matched_entry_id, existing_data):
     # print(existing_data)
     br.add_data(CASE_TABLE_ID, existing_data, row_id=matched_entry_id)
 
-    return f"{matched_entry_id}: {existing_data['Firstname']} {existing_data['Lastname']} {existing_data['Birthdate']}: {updated_fields=}"
+    return f"{matched_entry_id}: {existing_data['Firstname']} {existing_data['Lastname']} {existing_data['Birthdate']} - Termin {fmt_date}: {updated_fields=}"
 
 
 def create_entry(br, app):
     doctor = get_responsible_physician(active_doctors, app)
-    matched_doctor_id = get_baserow_physician_id(doctor, personnel_data)
+    if doctor is not None:
+        matched_doctor_id = get_baserow_physician_id(doctor, personnel_data)
+    else:
+        matched_doctor_id = None
     name_info = extract_patient_name(app.name)
 
     if name_info.dob:
@@ -263,17 +280,19 @@ def create_entry(br, app):
     else:
         dob = None
 
+    fmt_date = app.date_begin.date().isoformat()
+
     new_data = {
         "Firstname": name_info.firstname,
         "Lastname": name_info.lastname,
         "Birthdate": dob,
         "Clinician": [matched_doctor_id],
-        "Datum Einschluss": app.date_begin.date().isoformat(),
+        "Datum Einschluss": fmt_date,
     }
 
     entry_id = br.add_data(CASE_TABLE_ID, new_data)
 
-    return f"{entry_id}: {new_data['Firstname']} {new_data['Lastname']} {new_data['Birthdate']}"
+    return f"{entry_id}: {new_data['Firstname']} {new_data['Lastname']} {new_data['Birthdate']} - Termin {fmt_date}"
 
 
 

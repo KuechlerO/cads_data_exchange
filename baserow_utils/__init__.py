@@ -1,3 +1,4 @@
+from copy import deepcopy
 import requests
 
 
@@ -7,6 +8,12 @@ class BaserowApi:
             self._token = load_token(token_path)
         if token:
             self._token = token
+        self._fields = {}
+
+    def get_fields(self, table_id):
+        if table_id not in self._fields:
+            self._fields[table_id] = get_fields(table_id, self._token)
+        return self._fields[table_id]
 
     def get_data(self, table_id):
         return get_data(table_id, self._token)
@@ -38,11 +45,43 @@ class BaserowApi:
         )
         resp.raise_for_status()
 
-    def add_data(self, table_id, data, row_id=None):
+    def _convert_selects(self, data, fields):
+        data_conv = deepcopy(data)
+        def convert_option(v, opts):
+            if isinstance(v, int):
+                return v
+
+            for opt in opts:
+                if opt["value"] == v:
+                    return opt["id"]
+            raise RuntimeError(f"Could not convert {v} to any of {opts}")
+        for field in fields:
+            if not field["read_only"] and field["name"] in data_conv:
+                cur_value = data_conv[field["name"]]
+
+                if cur_value is None or cur_value == []:
+                    continue
+
+                if field["type"] == "single_select":
+                    data_conv[field["name"]] = convert_option(cur_value, field["select_options"])
+
+                elif field["type"] == "multiple_select":
+                    new_value = []
+                    for single_value in cur_value:
+                        conv_value = convert_option(single_value, field["select_options"])
+                        new_value.append(conv_value)
+                    data_conv[field["name"]] = new_value
+        return data_conv
+
+    def add_data(self, table_id, data, row_id=None) -> int:
+        fields = self.get_fields(table_id)
+        data_conv = self._convert_selects(data, fields)
         if row_id:
-            self._update_row(table_id, row_id, data)
+            self._update_row(table_id, row_id, data_conv)
         else:
-            self._create_row(table_id, data)
+            row_id = self._create_row(table_id, data_conv)
+
+        return row_id
 
 
 def load_token(token_path):
@@ -90,14 +129,14 @@ def _get_data(url, token):
 def format_value(raw_value, field_info):
     if field_info["type"] == "single_select":
         if isinstance(raw_value, dict):
-            return raw_value["id"]
+            return raw_value["value"]
         elif raw_value is None:
             return raw_value
         raise RuntimeError(f"malformed single_select {raw_value}")
     elif field_info["type"] == "multiple_select":
         if isinstance(raw_value, list):
             return [
-                v["id"] for v in raw_value
+                v["value"] for v in raw_value
             ]
         raise RuntimeError(f"malformed multiple_select {raw_value}")
     elif field_info["type"] == "link_row":

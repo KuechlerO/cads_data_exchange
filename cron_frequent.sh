@@ -7,5 +7,4 @@ PATH="/home/zhaom/micromamba/condabin:/home/zhaom/.local/bin:/usr/local/sbin:/us
 cd "$(dirname "$0")"
 . /home/zhaom/micromamba/etc/profile.d/micromamba.sh
 micromamba activate cads_data_exchange
-bash fetch_data.sh
-python ./generate_batch_email.py
+python ./mdb_to_mail.py
