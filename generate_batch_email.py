@@ -1,4 +1,3 @@
-from os import wait
 import re
 import json
 import pandas as pd
@@ -146,6 +145,9 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
     lb_fam = lb_data.loc[lb_data["Index-ID"].apply(lambda n: matchLbId(fam_id, n))].to_dict("records")
 
     lb_index = [l for l in lb_fam if l["Index-ID"] == l["LB-ID"]]
+    if len(lb_index) == 0:
+        lb_index = [l for l in lb_fam if matchLbId(l["Index-ID"], l["LB-ID"])]
+
     if len(lb_index) != 1:
         print(f"{fam_id} index samples not exactly 1: {lb_index}")
         return None
@@ -160,9 +162,8 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
         }
 
     cases_index_found = [(eid, edata) for eid, edata in cases_data.items() if matchSample(edata, lb_index)]
-    # cases_index_found = cases_data.loc[cases_data.apply(lambda s: matchSample(s, lb_index), axis=1)].to_dict("records")
 
-    lbid_fmt = fam_id
+    lbid_fmt = fam_id.replace("_", "-")
     firstname_fmt = ""
     lastname_fmt = ""
     birthdate_fmt = ""
@@ -177,7 +178,13 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
         birthdate_fmt = lb_index["Birthdate"]
         lbid_fmt = lb_index["LB-ID"]
     if cases_index_found:
-        (entry_id, tnamse_index), = cases_index_found
+        if len(cases_index_found) == 1:
+            (entry_id, tnamse_index), = cases_index_found
+        elif len(cases_index_found) > 1:
+            (entry_id, tnamse_index), = [(i, d) for i, d in cases_index_found if d["LB ID"] == lb_index["LB-ID"]]
+        else:
+            found_data = [(i, d["LB ID"]) for i, d in cases_index_found]
+            print(f"Multiple index cases found in baserow: {found_data}")
         if lb_index:
             if lb_index["Given Name"] != tnamse_index["Firstname"]:
                 firstname_fmt = f"TN({tnamse_index['Firstname']})|LB({lb_index['Given Name']})"
@@ -313,6 +320,12 @@ def send_email(title, message_text, recipients):
     s.quit()
 
 
+def get_varfish_new(varfish_data, cases_data):
+    case_uuids = [c["Varfish"].split("/")[-1] for c in cases_data.values() if c["Varfish"]]
+    missing_uuids = [f"{l} ({i})" for i, l in zip(varfish_data["sodar_uuid"], varfish_data["name"]) if i not in case_uuids]
+    return missing_uuids
+
+
 def main():
     paths = {
         "cases": "data/cases.json",
@@ -324,13 +337,15 @@ def main():
     cases_data = load_json(paths["cases"], cast=False)
     lb_data = load_tsv(paths["lb"])
     sodar_data = load_tsv(paths["sodar"])
-
     varfish_data = load_latest(paths["varfish"])
-    new_varfish_names = latest_has_changed(paths["varfish"])
-    if not new_varfish_names:
+
+    new_varfish_ids = get_varfish_new(varfish_data, cases_data)
+
+    if not new_varfish_ids:
         print("No new varfish entries. Do nothing")
         return 0
-    print("New varfish entries: ", ", ".join(new_varfish_names))
+
+    print("New varfish entries: ", ", ".join(new_varfish_ids))
 
     output_per_batch = {}
     for batch_id, sodar_batch in sodar_data.groupby("Characteristics[Batch]"):
