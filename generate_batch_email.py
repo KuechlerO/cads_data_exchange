@@ -138,6 +138,11 @@ def infer_analysis_type(num_entries, analysis_type):
     count_name = types.get(num_entries, num_entries)
     return f"{count_name}-{analysis_type}"
 
+def format_date(datestr):
+    if "." in datestr:
+        datestr = datetime.datetime.strptime(datestr, "%d.%m.%Y").date().isoformat()
+    return datestr
+
 
 def gather_info(fam_id, cases_data, lb_data, varfish_data):
     varfish_fam = varfish_data.loc[varfish_data["name"].apply(lambda n: matchLbId(fam_id, n))].to_dict("records")
@@ -175,7 +180,7 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
     if lb_index:
         firstname_fmt = lb_index["Given Name"]
         lastname_fmt = lb_index["Fam Name"]
-        birthdate_fmt = lb_index["Birthdate"]
+        birthdate_fmt = format_date(lb_index["Birthdate"])
         lbid_fmt = lb_index["LB-ID"]
     if cases_index_found:
         if len(cases_index_found) == 1:
@@ -192,8 +197,8 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
             if lb_index["Fam Name"] != tnamse_index["Lastname"]:
                 lastname_fmt = f"TN({tnamse_index['Lastname']})|LB({lb_index['Fam Name']})"
                 errors.append(("lastname", lastname_fmt))
-            if lb_index["Birthdate"] != tnamse_index["Birthdate"]:
-                birthdate_fmt = f"TN({tnamse_index['Birthdate']})|LB({lb_index['Birthdate']})"
+            if (d1 := format_date(lb_index["Birthdate"])) != (d2 := format_date(tnamse_index["Birthdate"])):
+                birthdate_fmt = f"TN({d1})|LB({d2})"
                 errors.append(("birthdate", birthdate_fmt))
             if not matchLbId(lb_index["LB-ID"], tnamse_index["LB ID"]):
                 lbid_fmt = f"TN({tnamse_index['LB ID']})|LB({lb_index['LB-ID']})"
@@ -219,11 +224,18 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
     }
 
 
-def format_info_line(info):
+def format_info_line(info, clinicians_data):
     if not info["firstlook"]:
         firstlook_fmt = "MISSING"
     else:
-        firstlook_fmt = info["firstlook"]
+        firstlook_datas = [clinicians_data[str(i)] for i in info["firstlook"]]
+        firstlook_fmt = ",".join(fl["Lastname"] for fl in firstlook_datas)
+
+    if not info["sender"]:
+        sender_fmt = "MISSING"
+    else:
+        sender_datas = [clinicians_data[str(i)] for i in info["sender"]]
+        sender_fmt = ",".join(d["Lastname"] for d in sender_datas)
 
     notifications = []
     if not info["varfish_found"]:
@@ -235,7 +247,7 @@ def format_info_line(info):
     notification = ",".join(notifications)
 
     error = ",".join(f"{n}({err})" for n, err in info["errors"])
-    info_line = f"{info['fam_id']}({info['lastname']}) Einsender: {info['sender']} First Look: {firstlook_fmt} - {notification} - {error}"
+    info_line = f"{info['fam_id']}({info['lastname']}) Einsender: {sender_fmt} First Look: {firstlook_fmt} {notification} {error}"
     return info_line
 
 
@@ -322,7 +334,8 @@ def send_email(title, message_text, recipients):
 
 def get_varfish_new(varfish_data, cases_data):
     case_uuids = [c["Varfish"].split("/")[-1] for c in cases_data.values() if c["Varfish"]]
-    missing_uuids = [f"{l} ({i})" for i, l in zip(varfish_data["sodar_uuid"], varfish_data["name"]) if i not in case_uuids]
+    case_comments = [c["Kommentar"] for c in cases_data.values()]
+    missing_uuids = [f"{l} ({i})" for i, l in zip(varfish_data["sodar_uuid"], varfish_data["name"]) if i not in case_uuids and not any((i in c) for c in case_comments if c)]
     return missing_uuids
 
 
@@ -335,6 +348,7 @@ def main():
         "clinicians": "data/clinicians.json",
     }
     cases_data = load_json(paths["cases"], cast=False)
+    clinicians_data = load_json(paths["clinicians"], cast=False)
     lb_data = load_tsv(paths["lb"])
     sodar_data = load_tsv(paths["sodar"])
     varfish_data = load_latest(paths["varfish"])
@@ -354,7 +368,7 @@ def main():
             info = gather_info(fam_id, cases_data, lb_data, varfish_data)
             if info["baserow_id"] is not None:
                 update_baserow(info)
-            formatted = format_info_line(info)
+            formatted = format_info_line(info, clinicians_data)
             output_per_batch[batch_id].append(formatted)
 
     output_per_batch = dict(sorted(output_per_batch.items(), reverse=True))
