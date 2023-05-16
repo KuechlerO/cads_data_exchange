@@ -283,9 +283,11 @@ def update_baserow(data):
 
     baserow_data = data["baserow_data"]
     changed_fields = []
-    if baserow_data["Datum Labor"] is None and lb_data["ProbenDate"] is not None:
-        baserow_data["Datum Labor"] = datetime.datetime.strptime(lb_data["ProbenDate"], "%d.%M.%Y").date().isoformat()
-        changed_fields.append("Datum Labor")
+    if lb_data["ProbenDate"] is not None:
+        new_proben_date = datetime.datetime.strptime(lb_data["ProbenDate"], "%d.%m.%Y").date().isoformat()
+        if baserow_data["Datum Labor"] != new_proben_date:
+            baserow_data["Datum Labor"] = new_proben_date
+            changed_fields.append("Datum Labor")
 
     if baserow_data["Varfish"] in (None, "") and varfish_data is not None:
         baserow_data["Varfish"] = f"https://varfish.bihealth.org/variants/f2acceb7-067d-41a4-8e39-236c022678f1/case/{varfish_data['sodar_uuid']}"
@@ -355,10 +357,6 @@ def main():
 
     new_varfish_ids = get_varfish_new(varfish_data, cases_data)
 
-    if not new_varfish_ids:
-        print("No new varfish entries. Do nothing")
-        return 0
-
     print("New varfish entries: ", ", ".join(new_varfish_ids))
 
     output_per_batch = {}
@@ -386,7 +384,9 @@ def main():
 
 {message_text}
 """
-    send_email("CADS Diagnostics - New Data in Varfish", message_text, recipients)
+    if new_varfish_ids:
+        ...
+        #   send_email("CADS Diagnostics - New Data in Varfish", message_text, recipients)
 
 
 if __name__ == "__main__":
