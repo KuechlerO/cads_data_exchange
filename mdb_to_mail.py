@@ -131,7 +131,7 @@ def extract_patient_name(name_text):
         name = name_text[:m.start()]
         dob = datetime.datetime.strptime(m.group(0), "%d.%M.%y").date()
 
-    name = name.strip(", ")
+    name = name.strip(", *")
     if "," in name:
         lastname, firstname = name.split(",")
     else:
