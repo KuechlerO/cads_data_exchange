@@ -385,8 +385,7 @@ def main():
 {message_text}
 """
     if new_varfish_ids:
-        ...
-        #   send_email("CADS Diagnostics - New Data in Varfish", message_text, recipients)
+        send_email("CADS Diagnostics - New Data in Varfish", message_text, recipients)
 
 
 if __name__ == "__main__":
