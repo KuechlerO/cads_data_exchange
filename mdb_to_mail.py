@@ -85,7 +85,6 @@ from io import StringIO
 msg_build = StringIO()
 print("Sprechstundentermine der nächsten 14 Tage\n", file=msg_build)
 start = datetime.datetime.now()
-end = start + datetime.timedelta(days=14)
 next_appointments = []
 
 def is_cads_appointment(app):
@@ -130,6 +129,7 @@ def extract_patient_name(name_text):
         name = name_text[:m.start()]
         dob = datetime.datetime.strptime(m.group(0), "%d.%m.%y").date()
 
+    name = name.replace("geb. am", "")
     name = name.strip(", *")
     if "," in name:
         lastname, firstname = name.split(",")
@@ -187,7 +187,6 @@ def match_patient_name(n1, n2):
         return True
     elif dob_matches:
         ...
-        # print(n1, n2)
     return False
 
 
