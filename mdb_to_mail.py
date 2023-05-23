@@ -125,11 +125,10 @@ def extract_patient_name(name_text):
     dob = None
     if m := re.search(r"\d{2}.\d{2}.\d{4}", name_text):
         name = name_text[:m.start()]
-        dob = datetime.datetime.strptime(m.group(0), "%d.%M.%Y").date()
-
-    if m := re.search(r"\d{2}.\d{2}.\d{2}", name_text):
+        dob = datetime.datetime.strptime(m.group(0), "%d.%m.%Y").date()
+    elif m := re.search(r"\d{2}.\d{2}.\d{2}", name_text):
         name = name_text[:m.start()]
-        dob = datetime.datetime.strptime(m.group(0), "%d.%M.%y").date()
+        dob = datetime.datetime.strptime(m.group(0), "%d.%m.%y").date()
 
     name = name.strip(", *")
     if "," in name:
@@ -143,7 +142,6 @@ def extract_patient_name(name_text):
     if lastname:
         lastname = lastname.strip()
 
-    # print(f"{firstname=} {lastname=} {dob=}, {name_text}")
     return NameInfo(firstname=firstname, lastname=lastname, dob=dob)
 
 
