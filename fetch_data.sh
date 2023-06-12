@@ -12,10 +12,10 @@ case_file="data/cases.json"
 mkdir -p "$sodar_dir"
 mkdir -p "$varfish_dir"
 
-sodar-cli samplesheet export --overwrite --write-output $sodar_dir $SODAR_PROJECT
-varfish-cli case --output-format json --output-file $varfish_file list $SODAR_PROJECT
-python ./fetch_lb_pel.py --username $PEL_USER --password $PEL_PASSWORD "$pel_file"
-python ./fetch_baserow_table.py "$clinicians_file"
-python ./fetch_baserow_table.py --table_id 579 "$case_file"
-
+NO_PROXY="bihealth.org" sodar-cli samplesheet export --overwrite --write-output $sodar_dir $SODAR_PROJECT
+NO_PROXY="bihealth.org" varfish-cli case --output-format json --output-file $varfish_file list $SODAR_PROJECT
+NO_PROXY="laborberlin.intern" python ./fetch_lb_pel.py --username $PEL_USER --password $PEL_PASSWORD "$pel_file"
+NO_PROXY="charite.de" python ./fetch_baserow_table.py "$clinicians_file"
+NO_PROXY="charite.de" python ./fetch_baserow_table.py --table_id 579 "$case_file"
+ 
 ./cleanup_old.py $varfish_dir

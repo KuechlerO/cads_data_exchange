@@ -247,7 +247,7 @@ def format_info_line(info, clinicians_data):
     notification = ",".join(notifications)
 
     error = ",".join(f"{n}({err})" for n, err in info["errors"])
-    info_line = f"{info['fam_id']}({info['lastname']}) Einsender: {sender_fmt} First Look: {firstlook_fmt} {notification} {error}"
+    info_line = f"{info['fam_id']}({info['lastname']} {info['birthdate']}) Einsender: {sender_fmt} First Look: {firstlook_fmt} {notification} {error}"
     return info_line
 
 

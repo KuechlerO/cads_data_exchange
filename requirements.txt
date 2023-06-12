@@ -1,1 +1,4 @@
-git+ssh://git@github.com/xiamaz/pel-transfer-tn@main
+git+https://github.com/xiamaz/pel-transfer-tn@main
+sodar-cli
+varfish-cli>=0.5.2
+lxml
