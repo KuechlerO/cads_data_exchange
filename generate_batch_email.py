@@ -8,6 +8,8 @@ from pathlib import Path
 from baserow_utils import BaserowApi
 from constants import CASE_TABLE_ID, PERSONNEL_TABLE_ID
 
+from unidecode import unidecode
+
 
 BR = BaserowApi(token_path=".baserow_token")
 
@@ -81,15 +83,47 @@ def matchLbId(lbid1, lbid2):
     return (m1.group(1), m1.group(2)) == (m2.group(1), m2.group(2))
 
 
+def matchName(name1, name2, strict=True):
+    """Match names for two persons. Ignores case and special characters.
+
+    If strict is set names will be directly compared.
+    """
+
+    n1 = unidecode(name1).lower().replace("-", " ")
+    n2 = unidecode(name2).lower().replace("-", " ")
+
+    # provide direct comparison if strict
+    if strict:
+        return n1 == n2
+
+    # compare first name if not strict
+    nparts1 = n1.split(" ")
+    nparts2 = n2.split(" ")
+    return nparts1[0] == nparts2[0]
+
+def format_date(datestr):
+    if "." in datestr:
+        datestr = datetime.datetime.strptime(datestr, "%d.%m.%Y").date().isoformat()
+    return datestr
+
+def matchDate(date1, date2):
+    """Match 2 dates.
+    """
+    d1 = format_date(date1)
+    d2 = format_date(date2)
+    return d1 == d2
+
+
 def matchSample(s, index_entry):
+
     return (
         matchLbId(s["LB ID"], index_entry["LB-ID"])
     ) or (
-        s["Lastname"] == index_entry["Fam Name"]
+        matchName(s["Lastname"], index_entry["Fam Name"], strict=True)
         and
-        s["Firstname"] == index_entry["Given Name"]
+        matchName(s["Firstname"], index_entry["Given Name"], strict=False)
         and
-        s["Birthdate"] == index_entry["Birthdate"]
+        matchDate(s["Birthdate"], index_entry["Birthdate"])
     )
 
 
@@ -138,11 +172,6 @@ def infer_analysis_type(num_entries, analysis_type):
     count_name = types.get(num_entries, num_entries)
     return f"{count_name}-{analysis_type}"
 
-def format_date(datestr):
-    if "." in datestr:
-        datestr = datetime.datetime.strptime(datestr, "%d.%m.%Y").date().isoformat()
-    return datestr
-
 
 def gather_info(fam_id, cases_data, lb_data, varfish_data):
     varfish_fam = varfish_data.loc[varfish_data["name"].apply(lambda n: matchLbId(fam_id, n))].to_dict("records")
@@ -166,6 +195,7 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
             "LB-ID": fam_id,
         }
 
+    # found in baserow
     cases_index_found = [(eid, edata) for eid, edata in cases_data.items() if matchSample(edata, lb_index)]
 
     lbid_fmt = fam_id.replace("_", "-")
@@ -200,11 +230,13 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
             if (d1 := format_date(lb_index["Birthdate"])) != (d2 := format_date(tnamse_index["Birthdate"])):
                 birthdate_fmt = f"TN({d1})|LB({d2})"
                 errors.append(("birthdate", birthdate_fmt))
-            if not matchLbId(lb_index["LB-ID"], tnamse_index["LB ID"]):
+            if tnamse_index["LB ID"] not in (None, "") and not matchLbId(lb_index["LB-ID"], tnamse_index["LB ID"]):
                 lbid_fmt = f"TN({tnamse_index['LB ID']})|LB({lb_index['LB-ID']})"
                 errors.append(("lbid", lbid_fmt))
         sender_fmt = tnamse_index["Clinician"]
         firstlook_fmt = tnamse_index["First Look"]
+    else:
+        print(lb_index, " not found")
 
     return {
         "fam_id": fam_id,
@@ -385,7 +417,8 @@ def main():
 {message_text}
 """
     if new_varfish_ids:
-        send_email("CADS Diagnostics - New Data in Varfish", message_text, recipients)
+        ...
+        # send_email("CADS Diagnostics - New Data in Varfish", message_text, recipients)
 
 
 if __name__ == "__main__":
