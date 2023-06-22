@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from enum import Enum
 
-from baserow_utils import BaserowApi
+from python_baserow_simple import BaserowApi
 
 DB_PATH = "/media/WMG/WMG-LZG/klinische Genetik/Terminplaner v.240/Arztpra2.MDB"
 

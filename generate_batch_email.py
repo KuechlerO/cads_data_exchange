@@ -5,7 +5,7 @@ import pandas as pd
 import datetime
 from pathlib import Path
 
-from baserow_utils import BaserowApi
+from python_baserow_simple import BaserowApi
 from constants import CASE_TABLE_ID, PERSONNEL_TABLE_ID
 
 from unidecode import unidecode
@@ -102,6 +102,8 @@ def matchName(name1, name2, strict=True):
     return nparts1[0] == nparts2[0]
 
 def format_date(datestr):
+    if datestr is None:
+        return datestr
     if "." in datestr:
         datestr = datetime.datetime.strptime(datestr, "%d.%m.%Y").date().isoformat()
     return datestr
@@ -216,10 +218,15 @@ def gather_info(fam_id, cases_data, lb_data, varfish_data):
         if len(cases_index_found) == 1:
             (entry_id, tnamse_index), = cases_index_found
         elif len(cases_index_found) > 1:
-            (entry_id, tnamse_index), = [(i, d) for i, d in cases_index_found if d["LB ID"] == lb_index["LB-ID"]]
+            index_candidates = [(i, d) for i, d in cases_index_found if d["LB ID"] == lb_index["LB-ID"]]
+            if len(index_candidates) == 1:
+                (entry_id, tnamse_index), = index_candidates
+            else:
+                print("Duplicate baserow entries {[i for i, _ in index_candidates]} with same LB ID: {lbid_fmt}")
         else:
             found_data = [(i, d["LB ID"]) for i, d in cases_index_found]
             print(f"Multiple index cases found in baserow: {found_data}")
+
         if lb_index:
             if lb_index["Given Name"] != tnamse_index["Firstname"]:
                 firstname_fmt = f"TN({tnamse_index['Firstname']})|LB({lb_index['Given Name']})"
@@ -309,14 +316,15 @@ def status_newer(new_status, old_status):
     old_index = STATUS_ORDER.index(old_status)
     return new_index > old_index
 
+
 def update_baserow(data):
     varfish_data = data["varfish_data"]
     lb_data = data["lb_data"]
 
     baserow_data = data["baserow_data"]
     changed_fields = []
-    if lb_data["ProbenDate"] is not None:
-        new_proben_date = datetime.datetime.strptime(lb_data["ProbenDate"], "%d.%m.%Y").date().isoformat()
+    if lb_data["ProbenDate"] is not None and (m := re.search(r"\d{2}.\d{2}.\d{4}", lb_data["ProbenDate"])):
+        new_proben_date = datetime.datetime.strptime(m.group(0), "%d.%m.%Y").date().isoformat()
         if baserow_data["Datum Labor"] != new_proben_date:
             baserow_data["Datum Labor"] = new_proben_date
             changed_fields.append("Datum Labor")

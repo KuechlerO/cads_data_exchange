@@ -3,3 +3,4 @@ sodar-cli
 varfish-cli>=0.5.2
 lxml
 unidecode>=1.3.6
+python-baserow-simple

@@ -2,9 +2,7 @@ from argparse import ArgumentParser
 
 import json
 
-import requests
-
-from baserow_utils import BaserowApi
+from python_baserow_simple import BaserowApi
 
 BR = BaserowApi(token_path=".baserow_token")
 
