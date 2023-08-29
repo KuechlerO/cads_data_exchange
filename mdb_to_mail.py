@@ -37,11 +37,18 @@ class Appointment:
     info: str
     name: str
     color_id: int
-    date_begin: datetime.datetime
-    date_end: datetime.datetime
+    date_begin: Optional[datetime.datetime]
+    date_end: Optional[datetime.datetime]
     resources: list
     raw: dict
     present: int
+    patient_id: Optional[int]
+
+    @property
+    def identifier(self):
+        if self.date_begin is None or self.date_begin is None or self.patient_id is None:
+            return None
+        return f"{self.patient_id}:{self.date_begin.isoformat()}{self.date_end.isoformat()}"
 
     @classmethod
     def from_raw_json(cls, data):
@@ -52,13 +59,13 @@ class Appointment:
             resources = [r for r in data["Resources"].split(";") if r]
             info = data.get("Info", None)
             name = data.get("Name", None)
+            patient_id = data.get('Patient_Id')
             status = data["Status_Id"]
             present = data.get("Anwesend", 0)
             raw = data
-        except KeyError as err:
-            # print(data, err)
+            return cls(status=status, info=info, color_id=color_id, date_begin=date_begin, date_end=date_end, name=name, raw=raw, resources=resources, present=present, patient_id=patient_id)
+        except KeyError:
             return None
-        return cls(status=status, info=info, color_id=color_id, date_begin=date_begin, date_end=date_end, name=name, raw=raw, resources=resources, present=present)
 
 
 @dataclass
@@ -132,7 +139,7 @@ def extract_patient_name(name_text):
     name = name.replace("geb. am", "")
     name = name.strip(", *")
     if "," in name:
-        lastname, firstname = name.split(",")
+        lastname, firstname, *_ = name.split(",")
     else:
         lastname = name
         firstname = None
@@ -175,6 +182,10 @@ def match_patient_name(n1, n2):
     else:
         dob_matches = False
 
+    reversed_matches = False
+    if firstname_exists and lastname_exists:
+        reversed_matches = n1.firstname == n2.lastname and n1.lastname == n2.firstname
+
     if firstname_matches and lastname_matches and dob_matches:
         return True
     elif dob_matches and lastname_matches:
@@ -182,6 +193,8 @@ def match_patient_name(n1, n2):
     elif firstname_matches and lastname_matches:
         return True
     elif dob_matches and firstname_matches:
+        return True
+    elif dob_matches and reversed_matches:
         return True
     elif lastname_matches and not (firstname_exists and dob_exists):
         return True
