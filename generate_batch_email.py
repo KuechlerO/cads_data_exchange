@@ -26,39 +26,39 @@ def load_tsv(path):
     table_data = pd.read_csv(path, sep="\t")
     return table_data
 
-def get_paths_by_date(path):
+def get_paths_by_date(path, prefix):
     path = Path(path)
     if not path.is_dir():
         raise RuntimeError("Needs to be directory with date formatted files")
     found_files = []
     for file in Path(path).iterdir():
-        if not file.is_dir() and (m := re.search(r"\d{4}-\d{2}-\d{2}", file.name)):
+        if not file.is_dir() and file.name.startswith(prefix) and (m := re.search(r"\d{4}-\d{2}-\d{2}", file.name)):
             found_files.append((datetime.date.fromisoformat(m.group(0)), file))
     found_files = sorted(found_files, key=lambda t: t[0], reverse=True)
     return found_files
 
-def get_second_latest_path(path):
-    paths_by_date = get_paths_by_date(path)
+def get_second_latest_path(path, prefix):
+    paths_by_date = get_paths_by_date(path, prefix=prefix)
     if len(paths_by_date) >= 2:
         return paths_by_date[1][1]
     return None
 
-def get_latest_path(path):
-    paths_by_date = get_paths_by_date(path)
+def get_latest_path(path, prefix):
+    paths_by_date = get_paths_by_date(path, prefix)
     if len(paths_by_date) >= 1:
         return paths_by_date[0][1]
     return None
 
-def load_latest(path):
-    latest_path = get_latest_path(path)
+def load_latest(path, prefix="cases"):
+    latest_path = get_latest_path(path, prefix=prefix)
     if latest_path:
         data = load_json(latest_path)
         return data
     return None
 
-def latest_has_changed(path):
-    latest = get_latest_path(path)
-    second_latest = get_second_latest_path(path)
+def latest_has_changed(path, prefix="cases"):
+    latest = get_latest_path(path, prefix=prefix)
+    second_latest = get_second_latest_path(path, prefix=prefix)
 
     # return true if second latest does not exist
     if not latest:
@@ -300,6 +300,39 @@ def match_cases(cases_data, fam_id, sample_ids):
     return found
 
 
+def update_baserow_from_varfish(cases_data, varfish_data):
+    all_updates = {}
+    for bs_id, bs_entry in cases_data.items():
+        update = {"current": bs_entry, "updates": []}
+        varfish_sodar_uuid = None
+
+        fam_id = bs_entry["LB ID"]
+        if not fam_id:
+            continue
+
+        varfish_fam = varfish_data.loc[varfish_data["name"].apply(lambda n: matchLbId(fam_id, n))].to_dict("records")
+        if not varfish_fam:
+            continue
+
+        varfish_sodar_uuid = varfish_fam[0]["sodar_uuid"]
+        varfish_status = VARFISH_STATUS_TO_BASEROW[varfish_fam[0]["status"]]
+
+        if (not bs_entry["Varfish"] or "http" in bs_entry["Varfish"]) and varfish_sodar_uuid:
+            update["updates"].append(("Varfish", varfish_sodar_uuid))
+
+        # bs_status = bs_entry["Case Status"]
+        # if varfish_status is not None and status_newer(varfish_status, bs_status):
+        #     update["updates"].append(("Case Status", varfish_status))
+
+        if update["updates"]:
+            if bs_id not in all_updates:
+                all_updates[bs_id] = update
+            else:
+                all_updates[bs_id]["updates"] += update["updates"]
+    return all_updates
+
+
+
 def update_baserow_from_sodar(cases_data, sodar_data, varfish_data):
 
 
@@ -366,6 +399,8 @@ def main():
     clinicians_data = load_json(paths["clinicians"], cast=False)
     sodar_data = load_tsv(paths["sodar"])
     varfish_data = load_latest(paths["varfish"])
+    varfish_tn_data = load_latest(paths["varfish"], prefix="tn_cases")
+    varfish_exomes_data = load_latest(paths["varfish"], prefix="exomes_cases")
 
     lb_updates = update_baserow_from_lb(cases_data, lb_data)
     if lb_updates:
@@ -376,6 +411,16 @@ def main():
     if sodar_updates:
         print("There are baserow updates to be submitted.")
         apply_updates_to_baserow(sodar_updates)
+
+    tn_updates = update_baserow_from_varfish(cases_data, varfish_tn_data)
+    if tn_updates:
+        print("There are baserow updates to be submitted.")
+        apply_updates_to_baserow(tn_updates)
+
+    exomes_updates = update_baserow_from_varfish(cases_data, varfish_exomes_data)
+    if exomes_updates:
+        print("There are baserow updates to be submitted.")
+        apply_updates_to_baserow(exomes_updates)
 
     new_varfish_ids = get_varfish_new(varfish_data, cases_data)
     print("New varfish entries: ", ", ".join(new_varfish_ids))
