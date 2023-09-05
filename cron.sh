@@ -10,5 +10,6 @@ HTTPS_PROXY=
 cd "$(dirname "$0")"
 . /home/zhaom/micromamba/etc/profile.d/micromamba.sh
 micromamba activate cads_data_exchange
+bash ./export_phenotips.sh
 bash fetch_data.sh
 NO_PROXY="charite.de" python ./generate_batch_email.py
