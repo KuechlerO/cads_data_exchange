@@ -11,6 +11,6 @@ NO_PROXY="charite.de" python ./fetch_baserow_table.py --table_id 582 "${TMP_PATH
 NO_PROXY="charite.de" python ./fetch_baserow_table.py --table_id 660 "${TMP_PATH}/LB-Metadata.xlsx"
 
 PASSWORD="/opt/.backup_password"
-zip -r --password $(< /opt/.backup_password) $BACKUP_PATH/baserow_export_$(date +"%Y-%m-%d_%k-%M").zip $TMP_PATH
+zip -r --password $(< ./.backup_password) $BACKUP_PATH/baserow_export_$(date +"%Y-%m-%d_%k-%M").zip $TMP_PATH
 
 rm -r "$TMP_PATH"

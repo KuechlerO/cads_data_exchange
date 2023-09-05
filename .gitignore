@@ -1,6 +1,7 @@
 *.json
 /sodar
 .baserow_token
+.backup_password
 /data
 .env
 __pycache__
