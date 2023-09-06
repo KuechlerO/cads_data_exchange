@@ -11,8 +11,11 @@ from constants import CASE_TABLE_ID, PERSONNEL_TABLE_ID
 
 from unidecode import unidecode
 
+from sams import SAMS, phenopacket_to_varfish_format
+
 
 BR = BaserowApi(token_path=".baserow_token")
+SM = SAMS.with_credentials(credentials_file=".sams_credentials")
 
 
 def load_json(path, cast=True):
@@ -93,7 +96,7 @@ def analysezahl_to_int(analysezahl):
     }.get(analysezahl, 0)
 
 
-def format_info_line(info, clinicians_data):
+def format_info_line(info, clinicians_data, matched_cases):
     if not info["First Look"]:
         firstlook_fmt = "MISSING"
     else:
@@ -106,7 +109,9 @@ def format_info_line(info, clinicians_data):
         sender_datas = [clinicians_data[str(i)] for i in info["Clinician"]]
         sender_fmt = ",".join(d["Lastname"] for d in sender_datas)
 
-    info_line = f"{info['LB ID']}({info['Lastname']} {info['Birthdate']}) Einsender: {sender_fmt} First Look: {firstlook_fmt}"
+    bsId = list(matched_cases.keys())[0]
+
+    info_line = f"{info['LB ID']}(SV-{bsId} {info['Lastname']} {info['Birthdate']}) Einsender: {sender_fmt} First Look: {firstlook_fmt}"
     return info_line
 
 
@@ -300,6 +305,37 @@ def match_cases(cases_data, fam_id, sample_ids):
     return found
 
 
+def update_baserow_from_sams(cases_data):
+    all_updates = {}
+    sams_data = SM.get_phenopackets()
+
+    def get_sams_case(sv_id):
+        for entry in sams_data:
+            if sv_id == entry["subject"]["id"]:
+                return entry
+        return {}
+
+    for bs_id, bs_entry in cases_data.items():
+        update = {"current": bs_entry, "updates": []}
+
+        # ignore if HPO Terms had already been submitted
+        if bs_entry["HPO Terms"]:
+            continue
+
+        sv_id = f"SV-{bs_id}"
+        if sams_sample := get_sams_case(sv_id):
+            hpo_string = phenopacket_to_varfish_format(sams_sample)
+            if hpo_string:
+                update["updates"].append(("HPO Terms", hpo_string))
+
+        if update["updates"]:
+            if bs_id not in all_updates:
+                all_updates[bs_id] = update
+            else:
+                all_updates[bs_id]["updates"] += update["updates"]
+    return all_updates
+
+
 def update_baserow_from_varfish(cases_data, varfish_data):
     all_updates = {}
     for bs_id, bs_entry in cases_data.items():
@@ -422,6 +458,11 @@ def main():
         print("There are baserow updates to be submitted.")
         apply_updates_to_baserow(exomes_updates)
 
+    sams_updates = update_baserow_from_sams(cases_data)
+    if sams_updates:
+        print("There are sams updates to be submitted")
+        apply_updates_to_baserow(sams_updates)
+
     new_varfish_ids = get_varfish_new(varfish_data, cases_data)
     print("New varfish entries: ", ", ".join(new_varfish_ids))
 
@@ -431,7 +472,7 @@ def main():
         for fam_id, sodar_fam in sodar_batch.groupby("Characteristics[Family]"):
             matched_cases = match_cases(cases_data, fam_id, [])
             info = list(matched_cases.values())[0]
-            formatted = format_info_line(info, clinicians_data)
+            formatted = format_info_line(info, clinicians_data, matched_cases)
             output_per_batch[batch_id].append(formatted)
 
     output_per_batch = dict(sorted(output_per_batch.items(), reverse=True))

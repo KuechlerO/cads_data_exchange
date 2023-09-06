@@ -1,6 +1,7 @@
 *.json
 /sodar
 .baserow_token
+.sams_credentials
 .backup_password
 /data
 .env
