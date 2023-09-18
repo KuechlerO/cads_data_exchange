@@ -7,7 +7,7 @@ import datetime
 from pathlib import Path
 
 from python_baserow_simple import BaserowApi
-from constants import CASE_TABLE_ID, PERSONNEL_TABLE_ID
+from constants import CASE_TABLE_ID
 
 from unidecode import unidecode
 
@@ -16,6 +16,10 @@ from sams import SAMS, phenopacket_to_varfish_format
 
 BR = BaserowApi(token_path=".baserow_token")
 SM = SAMS.with_credentials(credentials_file=".sams_credentials")
+
+
+class NameInfoException(Exception):
+    pass
 
 
 def load_json(path, cast=True):
@@ -199,7 +203,7 @@ class NameInfo:
             elif "." in birthdate:
                 birthdate = datetime.datetime.strptime(birthdate, "%d.%m.%Y").date()
             else:
-                raise TypeError(f"Invalid date string: {birthdate}")
+                raise NameInfoException(f"Invalid date string: {birthdate} from {last}, {first}")
         return cls(first=first, last=last, birthdate=birthdate)
 
     def match(self, other):
@@ -239,12 +243,22 @@ def update_baserow_from_lb(cases_data, lb_data):
         return found
 
     def match_sample_by_name(lb_data, firstname, lastname, birthdate):
-        name_info = NameInfo.from_any(firstname, lastname, birthdate)
+        try:
+            name_info = NameInfo.from_any(firstname, lastname, birthdate)
+        except NameInfoException as err:
+            print("Invalid name in terminland", err)
+            raise
         found = []
         for entry in lb_data.values():
-            entry_info = NameInfo.from_any(
-                entry["Firstname"], entry["Lastname"], entry["Birthdate"]
-            )
+            if not entry["Birthdate"] and not entry["LB ID"]:
+                continue
+            try:
+                entry_info = NameInfo.from_any(
+                    entry["Firstname"], entry["Lastname"], entry["Birthdate"]
+                )
+            except NameInfoException as err:
+                print("Invalid name in LB PEL", err, entry)
+                continue
             if name_info.match(entry_info):
                 found.append(entry)
         return found
@@ -426,9 +440,9 @@ def main():
     paths = {
         "cases": "data/cases.json",
         "lb": "data/lb_pel.json",
+        "clinicians": "data/clinicians.json",
         "sodar": "data/sodar/s_CADS_Exomes_Diagnostics.txt",
         "varfish": "data/varfish",
-        "clinicians": "data/clinicians.json",
     }
     cases_data = load_json(paths["cases"], cast=False)
     lb_data = load_json(paths["lb"], cast=False)
