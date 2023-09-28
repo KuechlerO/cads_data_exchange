@@ -39,7 +39,7 @@ ACMG_MAPPING = {
 }
 
 
-def format_clinvar_this_smallvar(finding):
+def format_clinvar_this_smallvar(finding, case_entry):
     assembly, chrom, pos, ref, alt = split_pos(finding["Position (VCF)"])
     omim = finding["OMIM"]
     inheritance = finding["Inheritance"]
@@ -48,19 +48,21 @@ def format_clinvar_this_smallvar(finding):
 
     hpo = finding["HPO Terms"]
 
+    consent = case_entry["Datenverarbeitung"]
+
     return {
         "ASSEMBLY": assembly,
         "CHROM": chrom,
         "POS": pos,
         "REF": ref,
-        "alt": alt,
+        "ALT": alt,
         "OMIM": omim,
         "MOI": inheritance,
         "CLIN_SIG": clin_sig,
         "CLIN_EVAL": clin_eval,
         "CLIN_COMMENT": finding["Interpretation (ClinVar)"],
         "KEY": finding["Clinvar-Upload-Key"],
-        "HPO": hpo,
+        "HPO": hpo if consent else "",
     }
 
 
@@ -84,11 +86,11 @@ def main(output_tsv_file: Path):
 
     exportable_cases = [c for c in cases_data.values() if is_exportable(c)]
 
-    exportable_findings = [f for c in exportable_cases for f in c["Findings"] if finding_is_exportable(f)]
+    exportable_findings = [(f, c) for c in exportable_cases for f in c["Findings"] if finding_is_exportable(f)]
 
     logger.info(f"{len(exportable_cases)} cases with total {len(exportable_findings)} exportable findings")
 
-    clinvar_mapped_results = [format_clinvar_this_smallvar(f) for f in exportable_findings]
+    clinvar_mapped_results = [format_clinvar_this_smallvar(f, c) for f, c in exportable_findings]
 
     write_to_tsv(clinvar_mapped_results, output_tsv_file)
 
