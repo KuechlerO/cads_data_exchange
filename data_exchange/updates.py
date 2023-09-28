@@ -12,7 +12,7 @@ from .nameinfo import NameInfo, NameInfoException
 
 from .varfish import VARFISH_STATUS_TO_BASEROW, get_findings
 
-from sams import phenopacket_to_varfish_format
+from .sams import phenopacket_to_varfish_format
 
 
 class Condition(str, Enum):

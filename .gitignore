@@ -6,6 +6,7 @@
 /data
 .env
 *.sqlite
+*.tsv
 __pycache__
 *.egg-info
 
