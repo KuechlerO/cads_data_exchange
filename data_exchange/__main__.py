@@ -5,7 +5,7 @@ import requests_cache
 
 from . import sams, varfish, baserow, sodar
 from .updates import update_baserow_from_lb, update_baserow_from_sodar, update_baserow_from_varfish, update_baserow_from_sams, update_baserow_from_varfish_variants
-from .baserow import apply_updates
+from .baserow import apply_updates, get_baserow_table
 from .validation import apply_validations, create_validation_updates
 import typer
 
@@ -19,11 +19,6 @@ ALL_DATA = {
     VARFISH: varfish.get_data,
     SODAR: sodar.get_data,
 }
-
-def get_baserow_table(tables, name):
-    for table in tables:
-        if table["name"] == name:
-            return table["data"]
 
 
 CASE_TABLE_NAME = "Cases"

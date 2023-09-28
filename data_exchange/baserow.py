@@ -151,12 +151,25 @@ def apply_updates(target_table_name: str, baserow_updates: List[BaserowUpdate], 
         logger.warning(f"DRY RUN. DATA NOT UPLOADED.")
 
 
+def get_baserow_table(tables, name):
+    for table in tables:
+        if table["name"] == name:
+            return table["data"]
+
+
+def get_table(table_name):
+    table_configs = settings.baserow.tables
+    for table_config in table_configs:
+        if table_name == table_config.name:
+            return BR.get_data(table_config.id)
+    else:
+        raise RuntimeError(f"Could not find a table with name {table_name} in configuration")
+
+
 def get_data():
     table_configs = settings.baserow.tables
     all_data = []
     for table_config in table_configs:
-        table_config.id
-        table_config.name
         data = BR.get_data(table_config.id)
         all_data.append({
             "id": table_config.id,

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data_exchange"
+authors = [
+    {name = "Max Xiaohang Zhao", email = "max.zhao@charite.de"},
+]
+description = "Data exchange integrations for baserow, sodar and varfish."
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = []
+license = {text = "Custom"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dynamic = ["version", "dependencies"]
+
+[tool.setuptools]
+packages = ["data_exchange"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = [ "requirements.txt" ] }
