@@ -1,0 +1,49 @@
+[ sources ]
+medgen_data_source = "Cases"
+lb_data_source = "LB-Metadata"
+
+[ myvariant ]
+url = "https://myvariant.info/v1/variant"
+email = "max.zhao@charite.de"
+size = 5
+
+[ varfish ]
+url = "https://varfish.bihealth.org"
+
+[ sodar ]
+url = "https://sodar.bihealth.org"
+
+[[ sodar.project ]]
+id = "f2acceb7-067d-41a4-8e39-236c022678f1"
+name = "CADS WGS Coding"
+data_type = "Genom"
+
+[[ sodar.project ]]
+id = "17328747-5a36-43bc-900d-5941008c872a"
+name = "Translate-NAMSE"
+data_type = "Exom"
+
+[[ sodar.project ]]
+id = "4ad70119-1beb-4505-a17a-fe2c05b15f89"
+name = "Exomes Selektivvertrag"
+data_type = "Exom"
+
+[ baserow ]
+
+url = "https://phenotips.charite.de"
+
+[[ baserow.tables ]]
+id = 579
+name = "Cases"
+
+[[ baserow.tables ]]
+id = 582
+name = "Personnel"
+
+[[ baserow.tables ]]
+id = 581
+name = "Findings"
+
+[[ baserow.tables ]]
+id = 660
+name = "LB-Metadata"

@@ -5,6 +5,7 @@
 .backup_password
 /data
 .env
+*.sqlite
 __pycache__
 
 # Ignore dynaconf secret files
