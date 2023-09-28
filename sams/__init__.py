@@ -37,9 +37,15 @@ class SAMS:
         return patient_data
 
     @classmethod
-    def with_credentials(cls, credentials_file: str):
+    def with_credentials_file(cls, credentials_file: str):
         with open(credentials_file) as f:
             username, password = [l.strip() for l in f.readlines()]
+        s = cls()
+        s.login(username, password)
+        return s
+
+    @classmethod
+    def with_username(cls, username: str, password: str):
         s = cls()
         s.login(username, password)
         return s

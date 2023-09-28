@@ -1,22 +1,9 @@
 # Export/Import for Exomdiagnostics
 
-## Automated Email systems
+`data_exchange` merges information contained in Baserow.
 
-These systems run inside a cronjob periodically and are currently used for
-notification and automated assignment on new batches.
+Users in Baserow are used to generate a number of notification emails.
 
-Main systems include:
+## General data flow
 
-`./combine_tnamse.py`
-  Merges PEL, SODAR Samplesheet and TNamse Data in order to generate a mail with
-  assignments per batch.
-
-`./mdb_to_mail.py`
-  Extracts appointments for individual users and sends them a mail with
-  appointments for the next 14 days.
-
-## Baserow import
-
-`./fetch_baserow_schemas.py`
-  Extract baserow schemas into yaml format. This is used to manually add the
-  mapping from our tnamse export.
+LB Data -> `pel_transfer` -> Baserow (LB-Metadata)
