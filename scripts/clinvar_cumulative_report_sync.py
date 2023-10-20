@@ -51,6 +51,7 @@ def coords_to_position(clinvar_entry):
 
 
 BASEROW_FINDING_KEY_FIELD = "Clinvar-Upload-Key"
+BASEROW_CLINVAR_ID = "Clinvar-ID"
 
 
 def main(clinvar_tsv: Path, dry_run: bool = False):
@@ -67,6 +68,7 @@ def main(clinvar_tsv: Path, dry_run: bool = False):
     updates = []
     for clinvar_entry in clinvar_data:
         clinvar_key = clinvar_entry["Your_record_id"]
+        clinvar_id = clinvar_entry["SCV"]
         if position := coords_to_position(clinvar_entry):
             for fid, finding in finding_data.items():
                 vcf_position_key = finding["Position (VCF)"]
@@ -74,6 +76,9 @@ def main(clinvar_tsv: Path, dry_run: bool = False):
                     update = BaserowUpdate(fid, finding)
                     if not finding[BASEROW_FINDING_KEY_FIELD]:
                         update.add_update(BASEROW_FINDING_KEY_FIELD, clinvar_key)
+                    if clinvar_id and (not finding[BASEROW_CLINVAR_ID] or "SCV" not in finding[BASEROW_CLINVAR_ID]):
+                        update.add_update(BASEROW_CLINVAR_ID, clinvar_id)
+                    if update.has_updates:
                         updates.append(update)
                     matched += 1
             else:

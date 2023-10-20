@@ -7,6 +7,11 @@ from python_baserow_simple import BaserowApi
 from attrs import define, field
 from loguru import logger
 
+
+VALI_OK = "HPO+Omim+Inheritance+ACMG+Flag in VarFish"
+VALI_FAIL = "AutoValidation Errors"
+VALI_FIN = "ClinVar Uploaded"
+
 STATUS_ORDER = [
     "Invalid",
     "Storniert",
@@ -72,6 +77,10 @@ class BaserowUpdate:
         return self
 
     def add_update(self, key, value):
+        # do not update if value idem
+        if self.entry.get(key) == value:
+            return
+
         if key in self.updates and self.updates[key] != value:
             raise UpdateConflictError(f"{key} current: {self.updates[key]} new: {value} entry: {self.entry}")
         self.updates[key] = value
@@ -130,6 +139,24 @@ def expand_updates(cases, updates: list) -> list:
     return all_updates
 
 
+def merge_entries(base_data, base_updates, base_field, linked_data, linked_updates, linked_field):
+    all_updates = expand_updates(base_data, base_updates)
+    all_linked_updates = expand_updates(linked_data, linked_updates)
+
+    linked_by_id = defaultdict(list)
+    for linked_update in all_linked_updates:
+        result = linked_update.result_entry()
+        for entry_id in result[linked_field]:
+            linked_by_id[entry_id].append(result)
+
+    result_entries = {}
+    for update in all_updates:
+        result = update.result_entry()
+        result[base_field] = linked_by_id[update.id]
+        result_entries[update.id] = result
+    return result_entries
+
+
 def apply_updates(target_table_name: str, baserow_updates: List[BaserowUpdate], dry_run: bool = True):
     merged_updates = merge_updates(baserow_updates)
     for table_config in settings.baserow.tables:
@@ -141,9 +168,10 @@ def apply_updates(target_table_name: str, baserow_updates: List[BaserowUpdate], 
 
     update_entries = []
     for update in merged_updates:
-        logger.debug(f"Updating table {target_table_name} entry {update.id} Fields: {', '.join(f'{k}={v}' for k, v in update.updates.items())}")
-        result_entry = update.result_entry()
-        update_entries.append(result_entry)
+        if update.has_updates:
+            logger.debug(f"Updating table {target_table_name} entry {update.id} Fields: {', '.join(f'{k}={v}' for k, v in update.updates.items())}")
+            result_entry = update.result_entry()
+            update_entries.append(result_entry)
 
     if not dry_run:
         BR.add_data_batch(table_id, update_entries)

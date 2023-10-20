@@ -30,24 +30,27 @@ def to_text_report_by_responsible(errors):
     by_responsibility = combine_validation_errors_by_responsible(errors)
 
     sensible_states = ("HPO+Omim+Inheritance+ACMG+Flag in VarFish", "Abgeglichen")
+    text_lines = []
     for person, p_errs in by_responsibility.items():
 
-        clinvar_errors = [e for e in p_errs if e.source.name == "ClinVar Upload"]
-        clinvar_errors_by_case = defaultdict(list)
-        for err in clinvar_errors:
-            clinvar_errors_by_case[err.entry_id].append(err)
-        print(person)
-        for cid, errs in clinvar_errors_by_case.items():
+        errors_by_case = combine_validation_errors_by_entry_id(p_errs)
+
+        text_lines.append(person)
+
+        for cid, errs in errors_by_case.items():
             if errs[0].entry["Varfish=Befund"] in sensible_states:
-                print(f"  === SV-{cid} ===")
-                print("  Cur Baserow Findings (Main/Incidental)")
+                text_lines.append(f"  === SV-{cid} ===")
+                text_lines.append("  Cur Baserow Findings (Main/Incidental)")
                 for f in errs[0].entry["Findings"]:
                     if f["id"] and f["ResultType"] in ("Main", "Incidental"):
-                        print("    ", f["Genename"], f["NM Transcript"], f["Mutation"])
-                print("  Unmatched Varfish Findings")
+                        text_lines.append(f"    {f['Genename']} {f['NM Transcript']} {f['Mutation']}")
+                text_lines.append("  Unmatched Varfish Findings")
                 for f in errs[0].entry["Findings"]:
                     if not f["id"]:
-                        print("    ", f.get("Genename"), f.get("NM Transcript"), f.get("Mutation"), f["Position (VCF)"])
-                print("  ><><><><><><")
+                        text_lines.append(f"    {f.get('Genename')} {f.get('NM Transcript')} {f.get('Mutation')} {f['Position (VCF)']}")
+                text_lines.append("  ><><><><><><")
                 for err in errs:
-                    print("    ", err.comment)
+                    text_lines.append("    " + err.comment)
+
+    report_text = "\n".join(text_lines)
+    return report_text

@@ -137,6 +137,16 @@ def check_fill_before_sign(rule, entry) -> List[ValidationError]:
             errors.append(
                 ValidationError(rule, entry, f"Findings/{finding['id']}", "", "", " ist Zufallsbefund, jedoch keine Einwilligung vorliegend. Entweder berichtet nein oder Einwilligung einholen.")
             )
+
+    if not entry["EV kontrolliert"]:
+        errors.append(
+            ValidationError(rule, entry, f"EV kontrolliert", "", "", "EV liegt nicht vor"),
+        )
+
+    if entry["Kati: Teilnahmeerklärung"] == "fehlt":
+        errors.append(
+            ValidationError(rule, entry, f"Kati: Teilnahmeerklärung", "", "", "Teilnahmeerklärung Selektivvertrag fehlt. Diese muss in die Ablage."),
+        )
     return errors
 
 
@@ -150,7 +160,7 @@ def check_clinvar(rule, entry) -> List[ValidationError]:
     for finding in findings:
         if finding.get("ResultType") not in ("Main", "Incidental"):
             continue
-        if not finding.get("OMIM") and entry_confirmed:
+        if not (finding.get("OMIM") or finding.get("PMIDs")) and entry_confirmed:
             errors.append(ValidationError(
                 rule, entry,
                 f"Findings/{finding['id']}", "", "", " OMIM fehlt"
@@ -276,12 +286,16 @@ def create_validation_updates(base_samples, errors) -> List[BaserowUpdate]:
         responsible = "/".join([r["Shorthand"] for r in err.responsible])
         return f"{err.source.name} (verantw. {responsible}): {err.field} {err.comment}"
 
-    for entry_id, entry_errors in errors_by_id.items():
-        update = BaserowUpdate(entry_id, base_samples[entry_id])
-        auto_validation_lines = []
-        for err in entry_errors:
-            auto_validation_lines.append(format_line(err))
-        update.add_update("AutoValidation", "\n".join(auto_validation_lines))
+    for entry_id, base_entry in base_samples.items():
+        update = BaserowUpdate(entry_id, base_entry)
+        entry_errors = errors_by_id.get(entry_id)
+        if entry_errors:
+            auto_validation_lines = []
+            for err in entry_errors:
+                auto_validation_lines.append(format_line(err))
+            update.add_update("AutoValidation", "\n".join(auto_validation_lines))
+        else:
+            update.add_update("AutoValidation", "")
         updates.append(update)
 
     return updates

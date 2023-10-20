@@ -7,7 +7,7 @@ from enum import Enum
 from loguru import logger
 from attrs import asdict, define
 
-from .baserow import BaserowUpdate, matchLbId, status_newer
+from .baserow import VALI_FAIL, VALI_FIN, VALI_OK, BaserowUpdate, matchLbId, status_newer
 from .nameinfo import NameInfo, NameInfoException
 
 from .varfish import VARFISH_STATUS_TO_BASEROW, get_findings
@@ -166,6 +166,12 @@ SODAR_UPDATE_MAPPINGS = [
     ),
 ]
 
+def apply_mapping(mappings: List[Mapping], update: BaserowUpdate, other_entry: dict) -> BaserowUpdate:
+    for mapping in mappings:
+        if kv := mapping.apply(other_entry, update.entry):
+            update.add_update(*kv)
+    return update
+
 def create_update(mappings, entry_id, entry, sodar_entry):
     update = BaserowUpdate(entry_id, entry)
 
@@ -315,6 +321,26 @@ def to_position_key(e):
     return f"{e['release']}_{e['chromosome']}-{e['start']}-{e['reference']}-{e['alternative']}"
 
 
+DISEASE_PREFIXES = ("OMIM", "ORPHA", "MONDO")
+PHENO_PREFIXES = ("HP",)
+
+def get_terms_prefix(terms, prefix):
+    return [t for t in terms if any(t.startswith(p) for p in prefix)]
+
+
+def select_terms(prefixes, mask_incidental=False):
+    def inner(e):
+        all_variant_terms = e["variant_terms"]
+        all_case_terms = e["case_terms"]
+        variant_terms = get_terms_prefix(all_variant_terms, prefixes)
+        case_terms = get_terms_prefix(all_case_terms, prefixes)
+        if mask_incidental and varfish_to_resulttype(e) == "Incidental":
+            case_terms = []
+        selected_terms = variant_terms or case_terms
+        return ";".join(selected_terms)
+    return inner
+
+
 VARFISH_SMALL_VARIANT_UPDATE_MAPPINGS = [
     Mapping(
         "gene_symbol",
@@ -358,14 +384,15 @@ VARFISH_SMALL_VARIANT_UPDATE_MAPPINGS = [
         transform=to_position_key,
     ),
     Mapping(
-        "variant_omim",
+        "",
         "OMIM",
-        transform=lambda e: ";".join(e)
+        transform=select_terms(DISEASE_PREFIXES),
+        when=Condition.DIFFERENT,
     ),
     Mapping(
-        "variant_hpo",
+        "",
         "HPO Terms",
-        transform=lambda e: ";".join(e)
+        transform=select_terms(PHENO_PREFIXES, mask_incidental=True),
     ),
     Mapping(
         "acmg_eval_date",
@@ -383,8 +410,9 @@ def fuzzy_match_hgvs(left_h, right_h):
 
 
 def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpdate]:
-    included_status = ["Solved", "VUS"]
-    included_cases = {cid: case for cid, case in all_cases.items() if case["Case Status"] in included_status and case["Varfish"]}
+    def case_applicable(case) -> bool:
+        included_status = ["Solved", "VUS"]
+        return case["Varfish"] and case["Varfish=Befund"] != "ClinVar Uploaded" and case["Case Status"] in included_status
 
     def match_finding_id(finding_rows, varfish_variant):
         """Match varfish variant to finding rows.
@@ -458,6 +486,8 @@ def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpd
                 unmatched_variants.append(varfish_variant)
         return matched_variants, unmatched_variants
 
+    included_cases = {cid: case for cid, case in all_cases.items() if case_applicable(case)}
+
     varfish_ids = [case["Varfish"] for case in included_cases.values() if case["Varfish"]]
     all_varfish_variants = get_findings(varfish_ids)
 
@@ -481,3 +511,98 @@ def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpd
                 all_updates.append(update)
 
     return all_updates
+
+
+def get_clinvar_upload_state(entry):
+    current_state = entry["Varfish=Befund"]
+    findings = entry["Findings"]
+
+    BLOCKING_STATES = [
+        "Forschungsgen. Bitte noch kein ClinVar Upload",
+        "komplexe SV",
+    ]
+
+    if current_state in BLOCKING_STATES:
+        return current_state
+
+    def main_findings_uploadable(findings):
+        has_main = any(f["ResultType"] == "Main" for f in findings)
+        has_incidental = any(f["ResultType"] == "Incidental" for f in findings)
+        all_main_filled = True
+        all_incidental_filled = True
+        for finding in findings:
+            if finding["ResultType"] == "Main" and not all(finding[f] for f in ("Inheritance", "ACMG Classification", "HPO Terms", "OMIM")):
+                all_main_filled = False
+            elif finding["ResultType"] == "Incidental" and not all(finding[f] for f in ("Inheritance", "ACMG Classification", "OMIM")):
+                all_incidental_filled = False
+        return has_main and all_main_filled and (not has_incidental or (has_incidental and all_incidental_filled))
+
+
+    new_state = current_state
+    if any("SCV" in f["Clinvar-ID"] for f in findings if f["Clinvar-ID"]):
+        new_state = VALI_FIN
+    elif "ClinVar" in entry["AutoValidation"]:
+        new_state = VALI_FAIL
+    elif main_findings_uploadable(findings):
+        new_state = VALI_OK
+    return new_state
+
+
+def get_contract_control_state(entry):
+    """This state is used by clerical personnel for controlling the completeness of our documentation.
+    """
+    MISSING_PARTICIPATION = "fehlt"
+    NO_BILLING = "keine Abrechnung"
+
+    NON_BILLED_CONTRACT_TYPES = [
+        "Keiner",
+        "Station",
+        "Privat",
+        "Forschung",
+        "Labor Berlin Befund nach KÜ",
+    ]
+
+    BILLED_CONTRACT_TYPES = [
+        "Selektivvertrag",
+        "Beratung"
+    ]
+
+    new_state = entry["Kati: Teilnahmeerklärung"]
+    if entry["Vertrag"] in NON_BILLED_CONTRACT_TYPES:
+        new_state = NO_BILLING
+    elif entry["Vertrag"] in BILLED_CONTRACT_TYPES:
+        match (entry["Vertrag"], entry["LB ID"], entry["Falltyp"]):
+            case "Selektivvertrag", lb_id, _ if not lb_id:
+                new_state = MISSING_PARTICIPATION
+            case "Beratung", _, _:
+                new_state = MISSING_PARTICIPATION
+            case _, _, "Re-Analyse":
+                new_state = MISSING_PARTICIPATION
+
+    return new_state
+
+
+STATUS_UPDATE_MAPPINGS = [
+    Mapping(
+        "",
+        "Varfish=Befund",
+        transform=get_clinvar_upload_state,
+        when=Condition.DIFFERENT,
+    ),
+    Mapping(
+        "",
+        "Kati: Teilnahmeerklärung",
+        transform=get_contract_control_state,
+        when=Condition.NONE,
+    ),
+]
+
+
+def update_entry_status(case_entries: dict, full_data: dict) -> List[BaserowUpdate]:
+    status_updates = []
+    for entry_id, entry_data in case_entries.items():
+        update = BaserowUpdate(entry_id, entry_data)
+        apply_mapping(STATUS_UPDATE_MAPPINGS, update, full_data[update.id])
+        if update.has_updates:
+            status_updates.append(update)
+    return status_updates

@@ -1,6 +1,7 @@
 from pathlib import Path
 from loguru import logger
 import typer
+import re
 from data_exchange.baserow import get_table
 
 from csv import DictWriter
@@ -18,10 +19,11 @@ def finding_is_exportable(finding):
 
 def is_exportable(entry):
     no_clinvar_errors = not entry["AutoValidation"] or "ClinVar" not in entry["AutoValidation"]
-    has_not_uploaded_findings = any(not f["Clinvar-Upload-Key"] for f in entry["Findings"] if finding_is_exportable(f))
+    has_not_uploaded_findings = any(not (f["Clinvar-ID"]) for f in entry["Findings"] if finding_is_exportable(f))
+    has_upload_errors = any((f["Clinvar-Errors"]) for f in entry["Findings"] if finding_is_exportable(f))
     is_completed = bool(entry["Case Status"] in ("Solved", "VUS"))
 
-    return no_clinvar_errors and has_not_uploaded_findings and is_completed
+    return no_clinvar_errors and (has_not_uploaded_findings or has_upload_errors) and is_completed
 
 
 def split_pos(position):
@@ -42,6 +44,13 @@ ACMG_MAPPING = {
 def format_clinvar_this_smallvar(finding, case_entry):
     assembly, chrom, pos, ref, alt = split_pos(finding["Position (VCF)"])
     omim = finding["OMIM"]
+    if not re.search(r"\d", omim):
+        omim = ""
+    if finding["Multiple Condition Explanation"]:
+        if omim:
+            omim += ";"
+        omim += finding["Multiple Condition Explanation"]
+
     inheritance = finding["Inheritance"]
     clin_sig = ACMG_MAPPING[finding["ACMG Classification"]]
     clin_eval = finding["EvaluationDate"]
@@ -49,6 +58,11 @@ def format_clinvar_this_smallvar(finding, case_entry):
     hpo = finding["HPO Terms"]
 
     consent = case_entry["Datenverarbeitung"]
+
+    if finding["Clinvar-ID"] and finding["Clinvar-ID"].startswith("SCV"):
+        accession = finding["Clinvar-ID"]
+    else:
+        accession = ""
 
     return {
         "ASSEMBLY": assembly,
@@ -63,11 +77,18 @@ def format_clinvar_this_smallvar(finding, case_entry):
         "CLIN_COMMENT": finding["Interpretation (ClinVar)"],
         "KEY": finding["Clinvar-Upload-Key"],
         "HPO": hpo if consent else "",
+        "PMID": finding["PMIDs"],
+        "ACCESSION": accession,
     }
+
+clinvar_this_header = ["ASSEMBLY", "CHROM", "POS", "REF", "ALT", "OMIM", "MOI", "CLIN_SIG", "CLIN_EVAL", "CLIN_COMMENT", "KEY", "HPO", "PMID", "ACCESSION"]
 
 
 def write_to_tsv(data, path):
-    fieldnames = data[0].keys()
+    if not data:
+        logger.warning("No entries to be written")
+
+    fieldnames = clinvar_this_header
     with path.open("w") as f:
         writer = DictWriter(f, fieldnames=fieldnames, delimiter="\t")
         writer.writeheader()

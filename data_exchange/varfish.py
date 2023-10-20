@@ -13,7 +13,7 @@ from varfish_cli import api
 from data_exchange.myvariant import MyVariantAPI
 
 from .config import settings
-from requests_cache import CachedSession
+# from requests_cache import CachedSession
 
 VARFISH_DEFAULT_LOCATION = "GRCh37"
 
@@ -59,7 +59,8 @@ def create_key(request, **kwargs) -> str:
 
 
 def create_session():
-    return CachedSession(allowable_methods=["GET", "HEAD", "POST"], filter_fn=lambda r: True, key_fn=create_key)
+    return requests.Session()
+    # return CachedSession(allowable_methods=["GET", "HEAD", "POST"], filter_fn=lambda r: True, key_fn=create_key)
 
 
 def get_inheritance_status(genotypes, pedigree):
@@ -114,6 +115,42 @@ def get_inheritance_status(genotypes, pedigree):
         return "de novo"
 
     return ""
+
+def get_terms_from_text(text):
+    terms = []
+    for match in re.finditer(r"((HPO|HP|OMIM|ORPHA|MONDO):?\d+)", text):
+        terms.append(match.group(1))
+    return terms
+
+
+def get_case_custom_text(case_data, case_comment_data):
+    case_notes = case_data["notes"]
+    case_comments = "\n".join([c['comment'] for c in case_comment_data])
+    return case_notes + "\n" + case_comments
+
+
+def get_case_phenotype_info(case_data, case_comment_data):
+    case_comments = get_case_custom_text(case_data, case_comment_data)
+    phenotype_terms = case_data["phenotype_terms"]
+    individual_to_terms = {
+        p["individual"]: p["terms"] for p in phenotype_terms
+    }
+    individual_to_terms[""] = get_terms_from_text(case_comments)
+    all_person_terms = list(itertools.chain.from_iterable(v for k, v in individual_to_terms.items() if k))
+
+    return individual_to_terms, all_person_terms
+
+
+def hpos_to_inheritance(terms):
+    terms = list(set(terms))
+    inheritances = []
+    for term in terms:
+        if mapped := HPO_INHERITANCE_MAPPING.get(term):
+            inheritances.append(mapped)
+    if len(inheritances) > 1:
+        logger.warning(f"Multiple inheritances found: {inheritances}")
+    if inheritances:
+        return inheritances[0]
 
 
 @define
@@ -178,6 +215,8 @@ class Varfish:
 
     def get_variant_mehari(self, chrom, pos, ref, alt, hgnc) -> dict:
         """Get Mehari results for variant."""
+        if not hgnc:
+            hgnc = None
         params = {
             "genome-release": VARFISH_DEFAULT_LOCATION.lower(),
             "chromosome": chrom,
@@ -193,34 +232,7 @@ class Varfish:
     def get_final_variants(self, varfish_uuid: str):
         case_data = self._get(self.case_info_url, varfish_uuid=varfish_uuid)
         case_comment_data = self._get(self.case_comment_url, varfish_uuid=varfish_uuid)
-
-        phenotype_terms = case_data["phenotype_terms"]
-        individual_to_terms = {
-            p["individual"]: p["terms"] for p in phenotype_terms
-        }
-        individual_to_terms[""] = []
-        case_comments = "\n".join([c['comment'] for c in case_comment_data])
-        case_notes = case_data["notes"]
-
-        def get_terms(text):
-            terms = []
-            for match in re.finditer(r"((HPO|HP|OMIM):\d+)", text):
-                terms.append(match.group(1))
-            return terms
-
-        individual_to_terms[""] = get_terms(case_comments + case_notes)
-        all_person_terms = list(itertools.chain.from_iterable(v for k, v in individual_to_terms.items() if k))
-
-        index_person_terms = []
-        seen_hpo = False
-        multiple_persons_have_hpos = False
-        for indiv, item in individual_to_terms.items():
-            if item and seen_hpo:
-                multiple_persons_have_hpos = True
-            if item:
-                seen_hpo = True
-            if indiv == case_data["index"]:
-                index_person_terms = item
+        individual_to_terms, all_person_terms = get_case_phenotype_info(case_data, case_comment_data)
 
         variant_data_resp = self._get(self.smallvar_annos_url, varfish_uuid=varfish_uuid)
         def to_pos(entry):
@@ -244,45 +256,29 @@ class Varfish:
             variant["comment_text"] = ""
             if comment_lines := variant_comments_by_pos.get(index):
                 variant["comment_text"] = "\n".join(comment_lines)
-                variant_terms = get_terms(variant["comment_text"])
+                variant_terms = get_terms_from_text(variant["comment_text"])
 
             variant["acmg_eval_date"] = ""
             if acmg_info := variant_acmg_by_pos.get(index):
                 variant["acmg_eval_date"] = acmg_info[0]["date_modified"].split("T")[0]
 
-            if not multiple_persons_have_hpos:
-                valid_terms = variant_terms + all_person_terms
+            if variant_terms:
+                valid_terms = variant_terms
             else:
-                valid_terms = variant_terms + index_person_terms
+                valid_terms = all_person_terms
 
             # remove duplicates
             valid_terms = list(set(valid_terms))
 
-            inheritance = ""
-            for term in valid_terms:
-                if mapped := HPO_INHERITANCE_MAPPING.get(term):
-                    if inheritance:
-                        raise RuntimeError("Inheritance conflict")
-                    inheritance = mapped
-
-            variant["variant_hpo"] = [t for t in valid_terms if 'hp' in t.lower() and t not in HPO_INHERITANCE_MAPPING]
-
-            variant["variant_omim"] = [t for t in valid_terms if 'omim' in t.lower()]
-            variant["inheritance"] = inheritance
-
+            variant["variant_terms"] = variant_terms
+            variant["case_terms"] = all_person_terms
+            variant["inheritance"] = hpos_to_inheritance(valid_terms)
             variant["inheritance_status"] = get_inheritance_status(variant["genotype"], case_data["pedigree"])
-
-            for case_term in individual_to_terms[""]:
-                if "OMIM" in case_term and not variant["variant_omim"]:
-                    variant["variant_omim"] = [case_term]
-                else:
-                    if case_term not in set(variant["variant_hpo"]):
-                        variant["variant_hpo"].append(case_term)
-
             variant["mehari"] = self.get_variant_mehari(variant["chromosome"], variant["start"], variant["reference"], variant["alternative"], variant["hgnc_id"])
 
             if not variant["mehari"]["result"]:
-                variant["myvariant"] = MyVariantAPI().get_annotations(variant["chromosome"], variant["start"], variant["reference"], variant["alternative"])
+                # variant["myvariant"] = MyVariantAPI().get_annotations(variant["chromosome"], variant["start"], variant["reference"], variant["alternative"])
+                raise RuntimeError("Mehari has no annotation for variant")
 
             if not variant["gene_symbol"]:
                 logger.warning("Variant with empty gene_symbol, try to fill from additional annotation sources")
@@ -301,18 +297,18 @@ class Varfish:
                         if hgvs_c and transcript_id and hgvs_p and gene_symbol:
                             found_tx = True
                             break
-                if not found_tx and (myvariant_results := variant.get("myvariant")):
-                    if snpeff_results := myvariant_results.get("snpeff"):
-                        if type(snpeff_results["ann"]) is dict:
-                            snpeff_results["ann"] = [snpeff_results["ann"]]
-                        for ann in snpeff_results["ann"]:
-                            gene_symbol = ann.get("genename")
-                            hgvs_c = ann.get("hgvs_c")
-                            hgvs_p = ann.get("hgvs_p")
-                            transcript_id = ann.get("feature_id")
-                            if gene_symbol and hgvs_c and hgvs_p and transcript_id:
-                                found_tx = True
-                                break
+                # if not found_tx and (myvariant_results := variant.get("myvariant")):
+                #     if snpeff_results := myvariant_results.get("snpeff"):
+                #         if type(snpeff_results["ann"]) is dict:
+                #             snpeff_results["ann"] = [snpeff_results["ann"]]
+                #         for ann in snpeff_results["ann"]:
+                #             gene_symbol = ann.get("genename")
+                #             hgvs_c = ann.get("hgvs_c")
+                #             hgvs_p = ann.get("hgvs_p")
+                #             transcript_id = ann.get("feature_id")
+                #             if gene_symbol and hgvs_c and hgvs_p and transcript_id:
+                #                 found_tx = True
+                #                 break
 
                 if found_tx and (gene_symbol or hgvs_c or hgvs_p or transcript_id):
                     variant["gene_symbol"] = gene_symbol
