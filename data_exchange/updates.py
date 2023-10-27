@@ -582,6 +582,26 @@ def get_contract_control_state(entry):
     return new_state
 
 
+def get_billing_clearance(entry):
+    """Once billing is allowed, the state will be set to yes.
+    """
+    CLEARED = "Ja"
+
+    if entry["Batch"] and entry["Vertrag"] == "Selektivvertrag":
+        return CLEARED
+
+    if entry["Falltyp"] == "Beratung" and entry["FK1"]:
+        return CLEARED
+
+    if entry["Falltyp"] == "Re-Analyse Exom" and entry["FK2"]:
+        return CLEARED
+
+    if entry["Falltyp"] == "Re-Analyse Genom" and entry["FK2"]:
+        return CLEARED
+
+    return ""
+
+
 STATUS_UPDATE_MAPPINGS = [
     Mapping(
         "",
@@ -593,6 +613,12 @@ STATUS_UPDATE_MAPPINGS = [
         "",
         "Kati: Teilnahmeerklärung",
         transform=get_contract_control_state,
+        when=Condition.NONE,
+    ),
+    Mapping(
+        "",
+        "Abrechnung freigegeben",
+        transform=get_billing_clearance,
         when=Condition.NONE,
     ),
 ]
