@@ -539,7 +539,10 @@ def get_clinvar_upload_state(entry):
 
 
     new_state = current_state
-    if any("SCV" in f["Clinvar-ID"] for f in findings if f["Clinvar-ID"]):
+    logger.warning(findings)
+    # Clinvar-ID might not exist if the finding is in the process of being
+    # created
+    if any("SCV" in f.get("Clinvar-ID") for f in findings if f.get("Clinvar-ID")):
         new_state = VALI_FIN
     elif "ClinVar" in entry["AutoValidation"]:
         new_state = VALI_FAIL

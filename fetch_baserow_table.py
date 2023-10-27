@@ -5,7 +5,9 @@ import json
 from python_baserow_simple import BaserowApi
 import pandas as pd
 
-BR = BaserowApi(token_path=".baserow_token")
+from data_exchange.config import settings
+
+BR = BaserowApi(database_url=settings.baserow.url, token=settings.baserow_token)
 
 
 def main():
