@@ -138,7 +138,7 @@ def check_fill_before_sign(rule, entry) -> List[ValidationError]:
                 ValidationError(rule, entry, f"Findings/{finding['id']}", "", "", " ist Zufallsbefund, jedoch keine Einwilligung vorliegend. Entweder berichtet nein oder Einwilligung einholen.")
             )
 
-    if not entry["EV kontrolliert"]:
+    if (not entry["EV kontrolliert"]) and entry["Falltyp"] == "Genom":
         errors.append(
             ValidationError(rule, entry, f"EV kontrolliert", "", "", "EV liegt nicht vor"),
         )
@@ -263,6 +263,14 @@ def apply_validations(personnel_data, cases_data, cases_updates, findings_data, 
                     all_errors += errors
     logger.info(rule_totals)
     return all_errors
+
+
+def group_by_errors(errors: List[ValidationError], key_fun):
+    group_by_results = defaultdict(lambda: defaultdict(list))
+    for err in errors:
+        for k in key_fun(err):
+            group_by_results[k][err.entry_id].append(err)
+    return group_by_results
 
 
 def combine_validation_errors_by_entry_id(errors: List[ValidationError]):

@@ -11,6 +11,8 @@ SAMS = "sams"
 CASE_TABLE_NAME = "Cases"
 FINDINGS_TABLE_NAME = "Findings"
 
+DATA_EXCHANGE_VERSION = "1"
+
 ALL_DATA = {
     SAMS: sams.get_data,
     BASEROW: baserow.get_data,

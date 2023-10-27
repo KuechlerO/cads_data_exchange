@@ -118,8 +118,8 @@ def update_baserow_from_lb(cases_data, lb_data) -> List[BaserowUpdate]:
             lb_samples = match_sample_by_name(lb_data, bs_entry["Firstname"], bs_entry["Lastname"], bs_entry["Birthdate"])
 
         if not lb_samples:
-            if not bs_lbid:
-                logger.info(f"No LB PEL Entry matched for {bs_id} {bs_entry['Firstname']} {bs_entry['Lastname']} {bs_entry['Birthdate']} LBID({bs_lbid})")
+            # if not bs_lbid:
+            #     logger.info(f"No LB PEL Entry matched for {bs_id} {bs_entry['Firstname']} {bs_entry['Lastname']} {bs_entry['Birthdate']} LBID({bs_lbid})")
             continue
         if len(lb_samples) > 1:
             logger.warning(f"{len(lb_samples)} PEL entries matched for {bs_id} {bs_entry['Firstname']} {bs_entry['Lastname']} {bs_entry['Birthdate']} LBID({bs_lbid})")
