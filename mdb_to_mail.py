@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from python_baserow_simple import BaserowApi
+from data_exchange.config import settings
 
 DB_PATH = "/media/WMG/WMG-LZG/klinische Genetik/Terminplaner v.240/Arztpra2.MDB"
 
@@ -84,7 +85,7 @@ max_zhao, = [d for d in active_doctors if 'Zhao' in d['Name']]
 appointments = [
     a for a in
     map(Appointment.from_raw_json, queryMdb(DB_PATH, "Termine"))
-    if a and a.date_begin.year >= 2023
+    if a and a.date_begin and a.date_begin.year >= 2023
 ]
 import calendar
 
@@ -117,7 +118,7 @@ for app in appointments:
             hsa_appointments.append(app)
 
 
-br = BaserowApi(token_path=".baserow_token")
+br = BaserowApi(database_url=settings.baserow.url, token=settings.baserow_token)
 CASE_TABLE_ID = 579
 PERSONNEL_TABLE_ID = 582
 
