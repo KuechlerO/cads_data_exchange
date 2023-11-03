@@ -575,7 +575,7 @@ def get_contract_control_state(entry):
         new_state = NO_BILLING
     elif entry["Vertrag"] in BILLED_CONTRACT_TYPES:
         match (entry["Vertrag"], entry["LB ID"], entry["Falltyp"]):
-            case "Selektivvertrag", lb_id, _ if not lb_id:
+            case "Selektivvertrag", lb_id, _ if lb_id:
                 new_state = MISSING_PARTICIPATION
             case "Beratung", _, _:
                 new_state = MISSING_PARTICIPATION
