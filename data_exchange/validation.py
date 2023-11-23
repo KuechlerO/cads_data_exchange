@@ -143,9 +143,9 @@ def check_fill_before_sign(rule, entry) -> List[ValidationError]:
             ValidationError(rule, entry, f"EV kontrolliert", "", "", "EV liegt nicht vor"),
         )
 
-    if entry["Kati: Teilnahmeerklärung"] == "fehlt":
+    if entry["Kati: Teilnahmeerklärung versendet"] == "fehlt":
         errors.append(
-            ValidationError(rule, entry, f"Kati: Teilnahmeerklärung", "", "", "Teilnahmeerklärung Selektivvertrag fehlt. Diese muss in die Ablage."),
+            ValidationError(rule, entry, f"Kati: Teilnahmeerklärung versendet", "", "", "Teilnahmeerklärung Selektivvertrag fehlt. Diese muss in die Ablage."),
         )
     return errors
 

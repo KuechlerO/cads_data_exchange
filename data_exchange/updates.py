@@ -435,14 +435,14 @@ def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpd
                         return fid
 
                 for mehari_tx in varfish_variant["mehari"]["result"]:
-                    gene_symbol = mehari_tx["gene-symbol"]
-                    hgvs_c = mehari_tx["hgvs-t"]
+                    gene_symbol = mehari_tx["gene_symbol"]
+                    hgvs_c = mehari_tx["hgvs_t"]
                     if gene_symbol and hgvs_c:
                         if gene_symbol == finding["Genename"] and fuzzy_match_hgvs(hgvs_c, finding["Mutation"]):
                             varfish_variant["gene_symbol"] = gene_symbol
                             varfish_variant["hgvs_c"] = hgvs_c
-                            varfish_variant["hgvs_p"] = mehari_tx["hgvs-p"]
-                            varfish_variant["transcript_id"] = mehari_tx["feature-id"]
+                            varfish_variant["hgvs_p"] = mehari_tx["hgvs_p"]
+                            varfish_variant["transcript_id"] = mehari_tx["feature_id"]
                             return fid
                 if myvariant_results := varfish_variant.get("myvariant"):
                     if snpeff_results := myvariant_results.get("snpeff"):
@@ -570,7 +570,7 @@ def get_contract_control_state(entry):
         "Beratung"
     ]
 
-    new_state = entry["Kati: Teilnahmeerklärung"]
+    new_state = entry["Kati: Teilnahmeerklärung versendet"]
     if entry["Vertrag"] in NON_BILLED_CONTRACT_TYPES:
         new_state = NO_BILLING
     elif entry["Vertrag"] in BILLED_CONTRACT_TYPES:
@@ -614,7 +614,7 @@ STATUS_UPDATE_MAPPINGS = [
     ),
     Mapping(
         "",
-        "Kati: Teilnahmeerklärung",
+        "Kati: Teilnahmeerklärung versendet",
         transform=get_contract_control_state,
         when=Condition.NONE,
     ),

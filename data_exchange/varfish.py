@@ -174,7 +174,7 @@ class Varfish:
     smallvar_acmg_url = "/variants/api/acmg-criteria-rating/list-create/{varfish_uuid}/"
     smallvar_row_url = "/variants/api/query-result-row/retrieve/{smallvar_uuid}"
 
-    mehari_url = "/proxy/varfish/mehari/tx/csq"
+    mehari_url = "/proxy/varfish/mehari/seqvars/csq"
 
     svs_flags_url = "/svs/ajax/structural-variant-flags/list-create/{varfish_uuid}"
     svs_comment_url = "/svs/ajax/structural-variant-comment/list-create/{varfish_uuid}"
@@ -218,7 +218,7 @@ class Varfish:
         if not hgnc:
             hgnc = None
         params = {
-            "genome-release": VARFISH_DEFAULT_LOCATION.lower(),
+            "genome_release": VARFISH_DEFAULT_LOCATION.lower(),
             "chromosome": chrom,
             "position": pos,
             "reference": ref,
@@ -290,10 +290,10 @@ class Varfish:
                 found_tx = False
                 if mehari_results := variant["mehari"]["result"]:
                     for mehari_tx in mehari_results:
-                        gene_symbol = mehari_tx["gene-symbol"]
-                        hgvs_c = mehari_tx["hgvs-t"]
-                        hgvs_p = mehari_tx["hgvs-p"]
-                        transcript_id = mehari_tx["feature-id"]
+                        gene_symbol = mehari_tx["gene_symbol"]
+                        hgvs_c = mehari_tx["hgvs_t"]
+                        hgvs_p = mehari_tx["hgvs_p"]
+                        transcript_id = mehari_tx["feature_id"]
                         if hgvs_c and transcript_id and hgvs_p and gene_symbol:
                             found_tx = True
                             break
