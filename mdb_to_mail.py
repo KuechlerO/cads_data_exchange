@@ -80,7 +80,8 @@ doctors = queryMdb(DB_PATH, "DocRooms")
 
 active_doctors = [d for d in doctors if not d['hidden'] and d['Type'] == 0]
 
-max_zhao, = [d for d in active_doctors if 'Zhao' in d['Name']]
+if not active_doctors:
+    raise RuntimeError("Database empty")
 
 appointments = [
     a for a in
