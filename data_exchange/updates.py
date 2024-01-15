@@ -7,7 +7,7 @@ from enum import Enum
 from loguru import logger
 from attrs import asdict, define
 
-from .baserow import VALI_FAIL, VALI_FIN, VALI_OK, BaserowUpdate, matchLbId, status_newer
+from .baserow import VALI_FAIL, VALI_FIN, VALI_BLOCKED, VALI_OK, VALI_UPLOADED, BaserowUpdate, matchLbId, status_newer, COLUMN_CLINVAR_STATUS, COLUMN_CLINVAR_REASON
 from .nameinfo import NameInfo, NameInfoException
 
 from .varfish import VARFISH_STATUS_TO_BASEROW, get_findings
@@ -412,7 +412,7 @@ def fuzzy_match_hgvs(left_h, right_h):
 def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpdate]:
     def case_applicable(case) -> bool:
         included_status = ["Solved", "VUS"]
-        return case["Varfish"] and case["Varfish=Befund"] != "ClinVar Uploaded" and case["Case Status"] in included_status
+        return case["Varfish"] and case[COLUMN_CLINVAR_STATUS] != VALI_UPLOADED and case["Case Status"] in included_status
 
     def match_finding_id(finding_rows, varfish_variant):
         """Match varfish variant to finding rows.
@@ -514,12 +514,11 @@ def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpd
 
 
 def get_clinvar_upload_state(entry):
-    current_state = entry["Varfish=Befund"]
+    current_state = entry[COLUMN_CLINVAR_STATUS]
     findings = entry["Findings"]
 
     BLOCKING_STATES = [
-        "Forschungsgen. Bitte noch kein ClinVar Upload",
-        "komplexe SV",
+        VALI_BLOCKED,
     ]
 
     if current_state in BLOCKING_STATES:
@@ -608,7 +607,7 @@ def get_billing_clearance(entry):
 STATUS_UPDATE_MAPPINGS = [
     Mapping(
         "",
-        "Varfish=Befund",
+        COLUMN_CLINVAR_STATUS,
         transform=get_clinvar_upload_state,
         when=Condition.DIFFERENT,
     ),

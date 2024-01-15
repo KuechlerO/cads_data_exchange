@@ -5,7 +5,7 @@ from attrs import define, field
 
 from loguru import logger
 
-from data_exchange.baserow import BaserowUpdate, expand_updates, merge_updates
+from data_exchange.baserow import COLUMN_CLINVAR_REASON, REASON_AUTOVALIDATION, VALI_BLOCKED, BaserowUpdate, expand_updates, VALI_OK, COLUMN_CLINVAR_STATUS
 
 
 class PersonRole(str, Enum):
@@ -81,7 +81,8 @@ def applies_to_clinvar_cases(entry):
         return False
     has_result = entry["Case Status"] in ("Solved", "VUS")
     has_varfish = bool(entry["Varfish"])
-    return has_result and has_varfish
+    clinvar_not_blocked = entry[COLUMN_CLINVAR_STATUS] != VALI_BLOCKED
+    return has_result and has_varfish and clinvar_not_blocked
 
 
 def check_required(rule, entry, required_fields) -> List[ValidationError]:
@@ -124,7 +125,7 @@ def check_fill_before_sign(rule, entry) -> List[ValidationError]:
     required_fields = [
         "FK2",
         "Datum Befund",
-        "Varfish=Befund",
+        COLUMN_CLINVAR_STATUS
     ]
     errors = []
     errors += check_required(rule, entry, required_fields)
@@ -151,10 +152,10 @@ def check_fill_before_sign(rule, entry) -> List[ValidationError]:
 
 
 def check_clinvar(rule, entry) -> List[ValidationError]:
-    case_status = entry["Varfish=Befund"]
+    case_status = entry[COLUMN_CLINVAR_STATUS]
     findings = entry["Findings"]
 
-    entry_confirmed = case_status == "HPO+Omim+Inheritance+ACMG+Flag in VarFish"
+    entry_confirmed = case_status == VALI_OK
     errors = []
 
     for finding in findings:
@@ -297,13 +298,27 @@ def create_validation_updates(base_samples, errors) -> List[BaserowUpdate]:
     for entry_id, base_entry in base_samples.items():
         update = BaserowUpdate(entry_id, base_entry)
         entry_errors = errors_by_id.get(entry_id)
+        clinvar_reasons = base_entry[COLUMN_CLINVAR_REASON]
         if entry_errors:
             auto_validation_lines = []
             for err in entry_errors:
                 auto_validation_lines.append(format_line(err))
+            auto_validation_text = "\n".join(auto_validation_lines)
             update.add_update("AutoValidation", "\n".join(auto_validation_lines))
+            if "ClinVar" in auto_validation_text:
+                if REASON_AUTOVALIDATION not in clinvar_reasons:
+                    update.add_update(COLUMN_CLINVAR_REASON, [*clinvar_reasons, REASON_AUTOVALIDATION])
+            else:
+                if REASON_AUTOVALIDATION in clinvar_reasons:
+                    clinvar_reasons_updated = clinvar_reasons.copy()
+                    clinvar_reasons_updated.remove(REASON_AUTOVALIDATION)
+                    update.add_update(COLUMN_CLINVAR_REASON, clinvar_reasons_updated)
         else:
             update.add_update("AutoValidation", "")
+            if REASON_AUTOVALIDATION in clinvar_reasons:
+                clinvar_reasons_updated = clinvar_reasons.copy()
+                clinvar_reasons_updated.remove(REASON_AUTOVALIDATION)
+                update.add_update(COLUMN_CLINVAR_REASON, clinvar_reasons_updated)
         updates.append(update)
 
     return updates

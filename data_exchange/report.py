@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import List
 
 from data_exchange.validation import ValidationError, combine_validation_errors_by_entry_id, combine_validation_errors_by_responsible
+from data_exchange.baserow import COLUMN_CLINVAR_STATUS
 
 def to_text_report(errors) -> str:
     by_entry_id = combine_validation_errors_by_entry_id(errors)
@@ -38,7 +39,7 @@ def to_text_report_by_responsible(errors):
         text_lines.append(person)
 
         for cid, errs in errors_by_case.items():
-            if errs[0].entry["Varfish=Befund"] in sensible_states:
+            if errs[0].entry[COLUMN_CLINVAR_STATUS] in sensible_states:
                 text_lines.append(f"  === SV-{cid} ===")
                 text_lines.append("  Cur Baserow Findings (Main/Incidental)")
                 for f in errs[0].entry["Findings"]:

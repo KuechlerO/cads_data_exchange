@@ -8,8 +8,14 @@ from attrs import define, field
 from loguru import logger
 
 
-VALI_OK = "HPO+Omim+Inheritance+ACMG+Flag in VarFish"
-VALI_FAIL = "AutoValidation Errors"
+COLUMN_CLINVAR_STATUS = "ClinVar-Upload Status"
+COLUMN_CLINVAR_REASON = "ClinVar-Upload Begründung"
+REASON_AUTOVALIDATION = "AutoValidation Fehler"
+
+VALI_UPLOADED = "ClinVar Uploaded"
+VALI_OK = "ClinVar freigegeben"
+VALI_FAIL = "Behebbare Fehler. Siehe Begründung"
+VALI_BLOCKED = "Kein Upload. Siehe Begründung"
 VALI_FIN = "ClinVar Uploaded"
 
 STATUS_ORDER = [
