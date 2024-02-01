@@ -412,7 +412,7 @@ def fuzzy_match_hgvs(left_h, right_h):
 def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpdate]:
     def case_applicable(case) -> bool:
         included_status = ["Solved", "VUS"]
-        return case["Varfish"] and case[COLUMN_CLINVAR_STATUS] != VALI_UPLOADED and case["Case Status"] in included_status
+        return case["Varfish"] and case[COLUMN_CLINVAR_STATUS] != VALI_UPLOADED and case[BASEROW_FIELD_STATUS] in included_status
 
     def match_finding_id(finding_rows, varfish_variant):
         """Match varfish variant to finding rows.
@@ -546,6 +546,8 @@ def get_clinvar_upload_state(entry):
     elif "ClinVar" in entry["AutoValidation"]:
         new_state = VALI_FAIL
     elif main_findings_uploadable(findings):
+        new_state = VALI_OK
+    elif entry.get(BASEROW_FIELD_STATUS) in ("Unsolved", "Invalid", "Storniert"):
         new_state = VALI_OK
     return new_state
 
