@@ -210,6 +210,9 @@ class Varfish:
         resp = self.session.get(result_url)
         resp.raise_for_status()
         data = resp.json()
+        print(url)
+        print(data)
+        print("<<<<<")
         return data
 
 
@@ -247,7 +250,7 @@ class Varfish:
             variant_comments_by_pos[to_pos(entry)].append(entry["text"])
 
         variant_acmg_by_pos = defaultdict(list)
-        for entry in self._get(self.smallvar_acmg_url, varfish_uuid=varfish_uuid):
+        for entry in self._get(self.smallvar_acmg_url, varfish_uuid=varfish_uuid).get("results", []):
             variant_acmg_by_pos[to_pos(entry)].append(entry)
 
         final_variants = []
