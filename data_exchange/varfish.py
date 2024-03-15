@@ -210,9 +210,6 @@ class Varfish:
         resp = self.session.get(result_url)
         resp.raise_for_status()
         data = resp.json()
-        print(url)
-        print(data)
-        print("<<<<<")
         return data
 
 
