@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% set active_page = "templates" %}
+
+{% block content %}
+<div class="container">
+  <ol class="list-group list-group-numbered">
+    {% for entry in entries.values() %}
+    <li class="list-group-item d-flex justify-content-between align-items-start">
+      <div class="ms-2 me-auto">
+        <div class="fw-bold">{{ entry.Name }}</div>
+        <button class="btn btn-primary" hx-get="/templates" name="{{ entry.id }}" hx-target="#tinfo" data-bs-toggle="modal" data-bs-target="#tinfo">
+          Edit
+        </button>
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+</div>
+<div id="tinfo" style="display: none" class="modal modal-blur fade" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content"></div>
+  </div>
+</div>
+{% endblock %}
