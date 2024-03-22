@@ -1,7 +1,7 @@
 import re
 from collections import defaultdict
 from functools import reduce
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 from .config import settings
 from python_baserow_simple import BaserowApi
 from attrs import define, field
@@ -48,12 +48,18 @@ def analysezahl_to_int(analysezahl: str) -> int:
 
 
 LB_ID_INNER = re.compile(r"(\d{2})[-_](\d{4})")
-def matchLbId(lbid1, lbid2):
-    m1 = LB_ID_INNER.search(str(lbid1))
-    m2 = LB_ID_INNER.search(str(lbid2))
-    if not (m1 and m2):
+
+def normalize_lbid(lbid: str) -> Optional[str]:
+    if m := LB_ID_INNER.search(str(lbid)):
+        return f"{m.group(1)}-{m.group(2)}"
+
+def matchLbId(lbid_left: str, lbid_right: str) -> bool:
+    normalized_left = normalize_lbid(lbid_left)
+    normalized_right = normalize_lbid(lbid_right)
+
+    if normalized_left is None or normalized_right is None:
         return False
-    return (m1.group(1), m1.group(2)) == (m2.group(1), m2.group(2))
+    return normalized_left == normalized_right
 
 
 BR = BaserowApi(database_url=settings.baserow.url, token=settings.baserow_token)

@@ -1,13 +1,14 @@
 from collections import defaultdict
+from functools import reduce
 import re
 import datetime
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Tuple
 from enum import Enum
 
 from loguru import logger
 from attrs import asdict, define
 
-from .baserow import VALI_FAIL, VALI_FIN, VALI_BLOCKED, VALI_OK, VALI_UPLOADED, BaserowUpdate, matchLbId, status_newer, COLUMN_CLINVAR_STATUS, COLUMN_CLINVAR_REASON
+from .baserow import VALI_FAIL, VALI_FIN, VALI_BLOCKED, VALI_OK, VALI_UPLOADED, BaserowUpdate, matchLbId, normalize_lbid, status_newer, COLUMN_CLINVAR_STATUS, COLUMN_CLINVAR_REASON
 from .nameinfo import NameInfo, NameInfoException
 
 from .varfish import VARFISH_STATUS_TO_BASEROW, get_findings
@@ -504,13 +505,139 @@ def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpd
 
         for varfish_variant in unmapped:
             if update := create_update_variant(cid, None, {}, varfish_variant):
-                if cid == 149:
-                    from pprint import pprint
-                    pprint(varfish_variant)
-                    print(update)
                 all_updates.append(update)
 
     return all_updates
+
+
+def update_baserow_relatives(cases_data, relatives_data, pel_data, sodar_data, varfish_data) -> List[BaserowUpdate]:
+    """Update Patients table with all persons found in either Cases or PEL."""
+    # use pel and cases to find data for relatives
+    def case_to_patient(entry_id, entry) -> dict:
+        return {
+            "Lastname": entry.get("Lastname", None),
+            "Firstname": entry.get("Firstname", None),
+            "Birthdate": entry.get("Birthdate", None),
+            "Gender": entry.get("Gender", None),
+            "Affected": True,
+            "Tested": True,
+            "LB ID": entry.get("LB ID", None),
+            "Index ID": entry.get("LB ID", None),
+            "SAP ID": "",
+            "Cases": [entry_id],
+            "RelationToIndex": "Index",
+        }
+
+    def pel_to_patient(entry) -> dict:
+        def fmt_dob(dob_raw):
+            if dob_raw:
+                return datetime.datetime.strptime(dob_raw, "%d.%m.%Y").date().isoformat()
+
+        return {
+            "LB ID": entry.get("LB ID", None),
+            "Index ID": entry.get("Index ID", None),
+            "Lastname": entry.get("Lastname", None),
+            "Firstname": entry.get("Firstname", None),
+            "Birthdate": fmt_dob(entry.get("Birthdate", None)),
+            "Gender": {"m": "Male", "f": "Female"}.get(entry.get("Gender", None), None),
+            "Material": entry.get("Material", None),
+        }
+
+    cases_patients = [case_to_patient(e_id, e) for e_id, e in cases_data.items()]
+    pel_patients = [pel_to_patient(e) for e in pel_data.values()]
+    existing_patients = []
+    for entry_id, entry in relatives_data.items():
+        entry["id"] = entry_id
+        existing_patients.append(entry)
+
+    # merge patients
+    def get_index_entries(index_id, entries):
+        indexes = []
+        for entry in entries:
+            if normalize_lbid(entry["LB ID"]) == index_id:
+                indexes.append(entry)
+        return indexes
+
+    def get_case_ids(entries):
+        return [cid for entry in entries for cid in entry.get("Cases", [])]
+
+    def merge_entries(added_entries, entry):
+        """Fold entry into added entries."""
+
+        def match_entry(entry_left, entry_right):
+            items_left = entry_left["Firstname"], entry_left["Lastname"], entry_left["Birthdate"]
+            items_right = entry_right["Firstname"], entry_right["Lastname"], entry_right["Birthdate"]
+            return matchLbId(entry_left["LB ID"], entry_right["LB ID"]) or items_left == items_right
+
+        def merge_into(entry, other):
+            for key, value in other.items():
+                if not entry.get(key):
+                    entry[key] = value
+
+        for added_entry in added_entries.copy():
+            if match_entry(entry, added_entry):
+                merge_into(added_entry, entry)
+                break
+        else:
+            added_entries.append(entry)
+        return added_entries
+
+    def add_index_ids(existing_ids, new_ids):
+        return [i for i in set(existing_ids) | set(new_ids) if i]
+
+    all_merged_entries = reduce(merge_entries, cases_patients + pel_patients + existing_patients, [])
+
+    # group by index_id
+    grouped_by_index = defaultdict(list)
+    for entry in all_merged_entries:
+        grouped_by_index[normalize_lbid(entry.get("Index ID"))].append(entry)
+
+    final_entries = []
+    for index_id, entries in grouped_by_index.items():
+        indexes = get_index_entries(index_id, entries)
+        case_ids = get_case_ids(indexes)
+        for entry in entries:
+            if index_id:
+                entry["Cases"] = add_index_ids(entry.get("Cases", []), case_ids)
+            final_entries.append(entry)
+
+    # use sodar and varfish to find relative info
+    sodar_all_entries = [entry for dataset in sodar_data for entry in dataset["data"]]
+    sodar_by_family = defaultdict(list)
+    for entry in sodar_all_entries:
+        sodar_by_family[normalize_lbid(entry["Characteristics[Family]"])].append(entry)
+
+    sodar_id_to_relationship = {}
+    for fam_id, entries in sodar_by_family.items():
+        entries_by_lb_id_norm = {normalize_lbid(e["Sample Name"]): e for e in entries}
+        index_mother = None
+        index_father = None
+        siblings = []
+        for entry in entries:
+            is_index = normalize_lbid(entry["Sample Name"]) == fam_id
+            mother_id = entry["Characteristics[Father]"]
+            father_id = entry["Characteristics[Mother]"]
+            if is_index:
+                index_mother = normalize_lbid(mother_id)
+                index_father = normalize_lbid(father_id)
+            if (index_mother is not None and mother_id == index_mother) and (index_father is not None and father_id == index_father):
+                siblings.append(normalize_lbid(entry["Sample Name"]))
+
+        sodar_id_to_relationship[index_mother] = "Mother"
+        sodar_id_to_relationship[index_father] = "Father"
+        sodar_id_to_relationship[fam_id] = "Index"
+        for sibling in siblings:
+            sodar_id_to_relationship[sibling] = "Sibling"
+
+    for entry in final_entries:
+        if rel := sodar_id_to_relationship.get(normalize_lbid(entry["LB ID"])):
+            if not entry.get("RelationToIndex"):
+                entry["RelationToIndex"] = rel
+
+    # create_updates
+    updates = [BaserowUpdate(e.get("id", None), e, e) for e in all_merged_entries]
+
+    return updates
 
 
 def get_clinvar_upload_state(entry):
