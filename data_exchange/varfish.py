@@ -235,8 +235,12 @@ class Varfish:
         individual_to_terms, all_person_terms = get_case_phenotype_info(case_data, case_comment_data)
 
         variant_data_resp = self._get(self.smallvar_annos_url, varfish_uuid=varfish_uuid)
+
         def to_pos(entry):
             return (entry["chromosome"], entry["start"], entry["reference"], entry["alternative"])
+
+        def to_pos_sv(entry):
+            return (entry["chromosome"], entry["start"], entry["end"], entry["sv_sub_type"])
 
         final_variants_by_pos = {
             to_pos(entry): entry for entry in variant_data_resp["rows"] if entry["flag_final_causative"]
@@ -277,7 +281,6 @@ class Varfish:
             variant["mehari"] = self.get_variant_mehari(variant["chromosome"], variant["start"], variant["reference"], variant["alternative"], variant["hgnc_id"])
 
             if not variant["mehari"]["result"]:
-                # variant["myvariant"] = MyVariantAPI().get_annotations(variant["chromosome"], variant["start"], variant["reference"], variant["alternative"])
                 raise RuntimeError("Mehari has no annotation for variant")
 
             if not variant["gene_symbol"]:
@@ -297,18 +300,6 @@ class Varfish:
                         if hgvs_c and transcript_id and hgvs_p and gene_symbol:
                             found_tx = True
                             break
-                # if not found_tx and (myvariant_results := variant.get("myvariant")):
-                #     if snpeff_results := myvariant_results.get("snpeff"):
-                #         if type(snpeff_results["ann"]) is dict:
-                #             snpeff_results["ann"] = [snpeff_results["ann"]]
-                #         for ann in snpeff_results["ann"]:
-                #             gene_symbol = ann.get("genename")
-                #             hgvs_c = ann.get("hgvs_c")
-                #             hgvs_p = ann.get("hgvs_p")
-                #             transcript_id = ann.get("feature_id")
-                #             if gene_symbol and hgvs_c and hgvs_p and transcript_id:
-                #                 found_tx = True
-                #                 break
 
                 if found_tx and (gene_symbol or hgvs_c or hgvs_p or transcript_id):
                     variant["gene_symbol"] = gene_symbol
@@ -317,9 +308,6 @@ class Varfish:
                     variant["transcript_id"] = transcript_id
 
             final_variants.append(variant)
-
-        def to_pos_sv(entry):
-            return (entry["chromosome"], entry["start"], entry["end"], entry["sv_sub_type"])
 
         sv_pos_to_comment = {
             to_pos_sv(entry): "\n".join([entry["text"]])
@@ -373,9 +361,11 @@ def get_data():
 
 
 def get_findings(varfish_uuids: List[str]) -> Dict[str, List[dict]]:
+    logger.debug("Loading varfish variants")
     v = Varfish(settings.varfish.url)
     v.login(settings.varfish_user, settings.varfish_password)
     results = {}
     for uuid in varfish_uuids:
         results[uuid] = v.get_final_variants(uuid)
+    logger.debug("Loaded Varfish variants for {num_cases} cases", num_cases=len(varfish_uuids))
     return results

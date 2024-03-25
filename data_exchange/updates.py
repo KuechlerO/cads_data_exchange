@@ -410,9 +410,15 @@ def fuzzy_match_hgvs(left_h, right_h):
     return left_h in right_h
 
 
+def optionally_add_brackets(hgvs_p_str: str) -> str:
+    if "(" not in hgvs_p_str and hgvs_p_str.startswith("p.") and hgvs_p_str != "p.?":
+        hgvs_p_str = f"p.({hgvs_p_str.removeprefix('p.')})"
+    return hgvs_p_str
+
+
 def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpdate]:
     def case_applicable(case) -> bool:
-        included_status = ["Solved", "VUS"]
+        included_status = ["Solved", "VUS", "Unsolved"]
         return case["Varfish"] and case[COLUMN_CLINVAR_STATUS] != VALI_UPLOADED and case[BASEROW_FIELD_STATUS] in included_status
 
     def match_finding_id(finding_rows, varfish_variant):
@@ -480,6 +486,8 @@ def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpd
         unmatched_variants = []
         for varfish_variant in varfish_variants:
             matched_id = match_finding_id({fid: current_findings[fid] for fid in available_findings}, varfish_variant)
+            if "hgvs_p" in varfish_variant and varfish_variant["hgvs_p"]:
+                varfish_variant["hgvs_p"] = optionally_add_brackets(varfish_variant["hgvs_p"])
             if matched_id:
                 available_findings.remove(matched_id)
                 matched_variants[matched_id] = varfish_variant
@@ -615,8 +623,8 @@ def update_baserow_relatives(cases_data, relatives_data, pel_data, sodar_data, v
         siblings = []
         for entry in entries:
             is_index = normalize_lbid(entry["Sample Name"]) == fam_id
-            mother_id = entry["Characteristics[Father]"]
-            father_id = entry["Characteristics[Mother]"]
+            father_id = entry["Characteristics[Father]"]
+            mother_id = entry["Characteristics[Mother]"]
             if is_index:
                 index_mother = normalize_lbid(mother_id)
                 index_father = normalize_lbid(father_id)
@@ -657,9 +665,9 @@ def get_clinvar_upload_state(entry):
         all_main_filled = True
         all_incidental_filled = True
         for finding in findings:
-            if finding["ResultType"] == "Main" and not all(finding[f] for f in ("Inheritance", "ACMG Classification", "HPO Terms", "OMIM")):
+            if finding["ResultType"] == "Main" and not all(finding.get(f) for f in ("Inheritance", "ACMG Classification", "HPO Terms", "OMIM")):
                 all_main_filled = False
-            elif finding["ResultType"] == "Incidental" and not all(finding[f] for f in ("Inheritance", "ACMG Classification", "OMIM")):
+            elif finding["ResultType"] == "Incidental" and not all(finding.get(f) for f in ("Inheritance", "ACMG Classification", "OMIM")):
                 all_incidental_filled = False
         return has_main and all_main_filled and (not has_incidental or (has_incidental and all_incidental_filled))
 

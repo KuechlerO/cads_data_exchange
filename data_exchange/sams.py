@@ -1,3 +1,4 @@
+from loguru import logger
 from .config import settings
 
 from typing import List
@@ -64,8 +65,9 @@ def phenopacket_to_varfish_format(pheno: dict) -> str:
 
 
 def get_data():
+    logger.debug("Loading SAMS")
     api = SAMS.with_username(settings.sams_user, settings.sams_password)
 
     sams_data = api.get_phenopackets()
-
+    logger.debug("Loaded {len} data from SAMS", len=len(sams_data))
     return sams_data

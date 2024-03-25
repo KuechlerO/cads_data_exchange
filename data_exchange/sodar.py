@@ -1,3 +1,4 @@
+from loguru import logger
 from sodar_cli import api
 
 from .config import settings
@@ -16,6 +17,7 @@ def parse_samplesheet(raw_data):
 
 
 def get_data():
+    logger.debug("Loading SODAR")
     sodar_data = []
     for project in settings.sodar.project:
         sodar_url = settings.sodar.url
@@ -27,4 +29,5 @@ def get_data():
             "data_type": project.data_type,
             "data": samplesheet_data,
         })
+    logger.debug("Loaded meta data from {num_projects} SODAR projects", num_projects=len(sodar_data))
     return sodar_data

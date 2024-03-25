@@ -134,7 +134,7 @@ def check_fill_before_sign(rule, entry) -> List[ValidationError]:
             ValidationError(rule, entry, "Findings", "", "in Varfish ausfüllen", " müssen in Varfish ausgefüllt werden")
         )
     for finding in entry["Findings"]:
-        if finding["ResultType"] == "Incidental" and not entry["Zufallsbefunde"] and finding["Berichtet"] != "Nein":
+        if finding["ResultType"] == "Incidental" and not entry["Zufallsbefunde"]:
             errors.append(
                 ValidationError(rule, entry, f"Findings/{finding['id']}", "", "", " ist Zufallsbefund, jedoch keine Einwilligung vorliegend. Entweder berichtet nein oder Einwilligung einholen.")
             )
