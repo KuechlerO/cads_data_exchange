@@ -7,6 +7,7 @@ from flask_htmx import HTMX
 
 from .baserow_api import BaserowTemplates
 from .docx_templating import check_config, generate_docx, get_docx_schema
+from .rules import RULE_FUNCTIONS
 
 TOKEN = os.environ.get("TOKEN")
 HEADERS = {"Authorization": f"Token {TOKEN}"}
@@ -65,6 +66,8 @@ def generate():
 
 @app.route("/templates", methods=["GET", "POST"])
 def templates():
+    functions_data = [{"name": name, "doc": fun.__doc__} for name, fun in RULE_FUNCTIONS.items()]
+    print(functions_data)
     if request.method == "POST":
         form_response = request.form.to_dict()
         template_id = form_response.pop("template_id")
@@ -75,7 +78,7 @@ def templates():
         errors = update_template_config(template_id, config_string)
         if errors:
             template_data = [{"tag": tag, "types": template_tags.get(tag, []), "config": config}for tag, config in form_response.items()]
-            return render_template("partials/template_update.html", template_data=template_data, template_name=template_name, template_id=template_id, errors=errors, template_json=json.dumps(template_data))
+            return render_template("partials/template_update.html", template_data=template_data, template_name=template_name, template_id=template_id, errors=errors, template_json=json.dumps(template_data), functions=functions_data)
     elif htmx:
         template_id = htmx.trigger_name
         template_data = BS.get_template(template_id)
@@ -90,6 +93,6 @@ def templates():
             for tag, types in template_schema.items()
         ]
         template_configuration.sort(key=lambda c: str.casefold(c["tag"]))
-        return render_template("partials/template_update.html", template_data=template_configuration, template_name=template_data["Name"], template_id=template_data["id"], template_json=json.dumps(template_configuration))
+        return render_template("partials/template_update.html", template_data=template_configuration, template_name=template_data["Name"], template_id=template_data["id"], template_json=json.dumps(template_configuration), functions=functions_data)
     templates = BS.get_templates()
     return render_template("templates.html", entries=templates)

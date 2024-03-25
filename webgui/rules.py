@@ -8,11 +8,12 @@ from lark import Transformer
 def _call_data(arg, data):
     if isinstance(arg, str):
         return arg
+    elif arg is None:
+        return data
     return arg(data)
 
 
 def iterable(f):
-
     @wraps(f)
     def _iterable(arg, *_):
         if isinstance(arg, list):
@@ -22,16 +23,18 @@ def iterable(f):
     return _iterable
 
 
-
 def field(field_name, default = None, *_):
-
+    """Select field from data by name."""
     @iterable
     def _field(data):
+        if data is None:
+            return data
         return data.get(field_name, default)
     return _field
 
 
 def first(default = None, *_):
+    """Select first item from list."""
     def _first(data):
         if data:
             return data[0]
@@ -39,21 +42,24 @@ def first(default = None, *_):
     return _first
 
 def concat(*args):
+    """Concatenate multiple fields from input arguments."""
     def _first(data):
         result = ""
         for arg in args:
-            result += _call_data(arg, data)
+            result += _call_data(arg, data) or ""
         return result
     return _first
 
 
 def join(separator):
+    """Join input list using separator symbol."""
     def _join(elements):
         return separator.join(elements)
     return _join
 
 
 def format(fmtstring, *args):
+    """Format arguments using a python format string, e.g. format("{}", ...)."""
 
     @iterable
     def _format(data):
@@ -63,6 +69,7 @@ def format(fmtstring, *args):
 
 
 def formatDate(input_fmt=None, output_fmt=None):
+    """Format a date in YYYY-MM-DD into DD.MM.YYYY. This can be further refined using syntax defined in https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes."""
     if input_fmt is None:
         input_fmt = "%Y-%m-%d"
     if output_fmt is None:
@@ -80,6 +87,7 @@ def formatDate(input_fmt=None, output_fmt=None):
     return _formatDate
 
 def translateGender(*_):
+    """Maps english gender terms to german ones."""
     def _format(data):
         return {
             "Male": "männlich",
@@ -87,47 +95,102 @@ def translateGender(*_):
         }.get(data, "Unbekannt")
     return _format
 
+def translateRelation(*_):
+    """Maps english relation terms to german ones."""
+    def _format(data):
+        return {
+            "Father": "Vater",
+            "Mother": "Mutter",
+            "Sister": "Schwester",
+            "Brother": "Bruder",
+        }.get(data, "Unbekannt")
+    return _format
+
 
 def testIs(field, value):
+    """Test if a given field is of a certain value."""
     def _testIs(data) -> bool:
         return data.get(field) == value
     return _testIs
 
 
 def testNot(arg):
+    """Test if a given argument is not."""
     def _testNot(data) -> bool:
         return not arg(data)
     return _testNot
 
 def testOr(*arg):
+    """Test if any argument is true."""
     def _testOr(data) -> bool:
         return any(a(data) for a in arg)
     return _testOr
 
 def testAnd(*arg):
+    """Test if all arguments are true."""
     def _testAnd(data) -> bool:
         return all(a(data) for a in arg)
     return _testAnd
 
 
 def funFilter(prefix):
+    """Filter list of entries based on function."""
     def _filter(entries) -> List[Any]:
         return [e for e in entries if prefix(e)]
     return _filter
 
 
 def funSort(direction = None, key = None):
+    """Sort list of entries."""
     if not direction:
         direction = "asc"
     reverse = {"asc": False, "desc": True}[direction]
+
+    if key is not None:
+        keyfun = lambda k: k.get(key)
+    else:
+        keyfun = None
+
     def _sort(entries) -> List[Any]:
-        return sorted(entries, key=key, reverse=reverse)
+        return sorted(entries, key=keyfun, reverse=reverse)
+
     return _sort
+
+
+def ifCondition(test, ifConsequence, elseConsequence):
+    """Test prefix and either choose branch A or branch B."""
+
+    @iterable
+    def _if(data):
+        if test(data):
+            if isinstance(ifConsequence, str) or ifConsequence is None:
+                return ifConsequence
+            return ifConsequence(data)
+        else:
+            if isinstance(elseConsequence, str) or elseConsequence is None:
+                return elseConsequence
+            return elseConsequence(data)
+    return _if
+
+
+def pipe(funs):
+    def _pipe(data):
+        result = data
+        for fun in funs:
+            result = fun(result)
+        return result
+    return _pipe
+
 
 
 class RuleTransformer(Transformer):
     def function(self, values):
         return values[0](*values[1:])
+
+    def value(self, values):
+        if isinstance(values, list):
+            return pipe(values)
+        return values
 
     def WORD(self, value):
         return RULE_FUNCTIONS[str(value)]
@@ -145,6 +208,7 @@ RULE_FUNCTIONS = {
     "concat": concat,
     "format": format,
     "translateGender": translateGender,
+    "translateRelation": translateRelation,
     "is": testIs,
     "not": testNot,
     "and": testAnd,
@@ -153,11 +217,12 @@ RULE_FUNCTIONS = {
     "join": join,
     "sort": funSort,
     "formatDate": formatDate,
+    "if": ifCondition,
 }
 
 RULE_PARSER = Lark(r"""
 rule: function ("|" function)*
-?value: function | ESCAPED_STRING | SIGNED_NUMBER
+?value: function ("|" function)* | ESCAPED_STRING | SIGNED_NUMBER
 ?function: WORD ["(" value ("," value)* ")" ]
 
 %import common.ESCAPED_STRING
@@ -178,5 +243,7 @@ def create_rule_function(rule_string):
         res = data
         for fun in tree.children:
             res = fun(res)
+        if res is None:
+            res = ""
         return res
     return _parse_rule

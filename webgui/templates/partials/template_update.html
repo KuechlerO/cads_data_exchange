@@ -11,19 +11,9 @@
 
         <p>Available functions</p>
         <pre>
-        field - select field from data by name
-        first - select first item from list
-        concat - concatenate multiple fields from input arguments
-        format - format arguments using a python format string
-        translateGender - maps english gender names to german ones
-        is - is("fieldname", "value"), works on a single element
-        not - not(operator ...), negatives truth value
-        and - and(operator, operator, ...) all conditions need to be true
-        or - or(operator, operator, ...) any condition needs to be true
-        filter - filter(truth_operator) filter data on criteria
-        join - join("separator") joins strings using separator
-        sort - sort("asc" or "desc", field(...) optional) sorts data using field or just the values in the list
-        formatDate - format a date in YYYY-MM-DD into DD.MM.YYYY. This can be further refined using syntax defined in https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+        {% for fun in functions %}
+        {{ fun.name }} - {{ fun.doc }}
+        {% endfor %}
         </pre>
       </div>
       <form id="control-form" hx-post="/templates" hx-target="#tinfo">
