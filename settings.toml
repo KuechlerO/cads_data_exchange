@@ -47,3 +47,7 @@ name = "Findings"
 [[ baserow.tables ]]
 id = 660
 name = "LB-Metadata"
+
+[[ baserow.tables ]]
+id = 580
+name = "Patients"
