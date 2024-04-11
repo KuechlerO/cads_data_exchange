@@ -1,8 +1,11 @@
 import datetime
+from inspect import signature
 from functools import reduce, wraps
 from typing import Any, List
 from lark import Lark
 from lark import Transformer
+
+from jinja2 import Template
 
 
 def _call_data(arg, data):
@@ -86,32 +89,73 @@ def formatDate(input_fmt=None, output_fmt=None):
 
     return _formatDate
 
-def translateGender(*_):
-    """Maps english gender terms to german ones."""
-    def _format(data):
-        return {
+def translate(type=None, *_):
+    """Translate keywords from english to german for presentation purposes.
+
+    type - can be either zygosity, gender, relation, acmg.
+    """
+    TRANSLATIONS = {
+        "gender": {
             "Male": "männlich",
             "Female": "weiblich",
-        }.get(data, "Unbekannt")
-    return _format
-
-def translateRelation(*_):
-    """Maps english relation terms to german ones."""
-    def _format(data):
-        return {
+        },
+        "relation": {
             "Father": "Vater",
             "Mother": "Mutter",
             "Sister": "Schwester",
             "Brother": "Bruder",
-        }.get(data, "Unbekannt")
-    return _format
+            "Index": "Index",
+        },
+        "zygosity": {
+            "Heterozygous": "Heterozygot",
+            "Homozygous": "Homozygot",
+            "Hemizygot": "Hemizygot",
+            "Homoplasmic": "Homoplasmisch",
+            "Heteroplasmic": "Heteroplasmisch",
+            "Mosaik": "Mosaik",
+        },
+        "acmg": {
+            "Pathogenic (V)": "pathogen (ACMG Klasse V)",
+            "Likely Pathogenic (IV)": "wahrscheinlich pathogen (ACMG Klasse IV)",
+            "Uncertain Significance (III)": "Variante unklarer Signifikanz (ACMG Klasse III)",
+            "Likely Benign (II)": "wahrscheinlich benigne (ACMG Klasse II)",
+            "Benign (I)": "benigne (ACMG Klasse I)",
+        }
+    }
+    if type in TRANSLATIONS:
+        LOOKUP = TRANSLATIONS[str(type)]
+    else:
+        LOOKUP = {k: v for vv in TRANSLATIONS.values() for k, v in vv.items()}
+
+    def _translate(data):
+        return LOOKUP.get(data, data)
+    return _translate
+
+
+def translateGender(*_):
+    """Maps english gender terms to german ones."""
+    return translate("gender")
+
+def translateRelation(*_):
+    """Maps english relation terms to german ones."""
+    return translate("relation")
 
 
 def testIs(field, value):
     """Test if a given field is of a certain value."""
+    @iterable
     def _testIs(data) -> bool:
+        if data is None:
+            return False
         return data.get(field) == value
     return _testIs
+
+
+def testEq(value):
+    @iterable
+    def _testEq(data) -> bool:
+        return data == value
+    return _testEq
 
 
 def testNot(arg):
@@ -122,6 +166,7 @@ def testNot(arg):
 
 def testOr(*arg):
     """Test if any argument is true."""
+    @iterable
     def _testOr(data) -> bool:
         return any(a(data) for a in arg)
     return _testOr
@@ -133,6 +178,20 @@ def testAnd(*arg):
     return _testAnd
 
 
+def testAny(arg):
+    """Test if condition is true for any elements in list."""
+    def _testAny(entries) -> bool:
+        return any(arg(e) for e in entries)
+    return _testAny
+
+
+def testAll(arg):
+    """Test if condition is true for all elements in list."""
+    def _testAll(entries) -> bool:
+        return all(arg(e) for e in entries)
+    return _testAll
+
+
 def funFilter(prefix):
     """Filter list of entries based on function."""
     def _filter(entries) -> List[Any]:
@@ -140,13 +199,24 @@ def funFilter(prefix):
     return _filter
 
 
-def funSort(direction = None, key = None):
+def funSort(direction = None, key = None, sortType=None):
     """Sort list of entries."""
     if not direction:
         direction = "asc"
     reverse = {"asc": False, "desc": True}[direction]
 
-    if key is not None:
+    RELATION_ORDER = [
+        "Index",
+        "Mother",
+        "Father",
+        "Sister",
+        "Brother",
+        "Other"
+    ]
+
+    if key is not None and sortType == "relation":
+        keyfun = lambda k: RELATION_ORDER.index(k.get(key))
+    elif key is not None:
         keyfun = lambda k: k.get(key)
     else:
         keyfun = None
@@ -160,7 +230,6 @@ def funSort(direction = None, key = None):
 def ifCondition(test, ifConsequence, elseConsequence):
     """Test prefix and either choose branch A or branch B."""
 
-    @iterable
     def _if(data):
         if test(data):
             if isinstance(ifConsequence, str) or ifConsequence is None:
@@ -171,6 +240,29 @@ def ifCondition(test, ifConsequence, elseConsequence):
                 return elseConsequence
             return elseConsequence(data)
     return _if
+
+
+def applySnippet(snippetName):
+
+    def _snippet(data, snippetData):
+        snippet = snippetData.get(snippetName)
+        if snippet:
+            return Template(snippet).render(data=data)
+
+    return _snippet
+
+
+def createSet(*_):
+    def _createSet(data: list) -> list:
+        """Create a set of the data and re-convert to list."""
+        return list(set(data))
+    return _createSet
+
+
+def listLength(*_):
+    def _listLength(data: list) -> int:
+        return len(data)
+    return _listLength
 
 
 def pipe(funs):
@@ -209,15 +301,22 @@ RULE_FUNCTIONS = {
     "format": format,
     "translateGender": translateGender,
     "translateRelation": translateRelation,
+    "translate": translate,
     "is": testIs,
+    "eq": testEq,
     "not": testNot,
     "and": testAnd,
     "or": testOr,
+    "any": testAny,
+    "all": testAll,
     "filter": funFilter,
     "join": join,
     "sort": funSort,
     "formatDate": formatDate,
     "if": ifCondition,
+    "snippet": applySnippet,
+    "set": createSet,
+    "len": listLength,
 }
 
 RULE_PARSER = Lark(r"""
@@ -239,10 +338,13 @@ def parse_rule(rule_string):
 
 def create_rule_function(rule_string):
     tree = parse_rule(rule_string)
-    def _parse_rule(data):
+    def _parse_rule(data, snippets=None):
         res = data
         for fun in tree.children:
-            res = fun(res)
+            if len(signature(fun).parameters) > 1:
+                res = fun(res, snippets)
+            else:
+                res = fun(res)
         if res is None:
             res = ""
         return res

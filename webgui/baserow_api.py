@@ -5,8 +5,9 @@ from python_baserow_simple import BaserowApi
 
 class BaserowTemplates(BaserowApi):
 
-    TEMPLATE_TABLE_ID = 770
+    TEMPLATE_TABLE_ID = 835
     CASE_TABLE_ID = 579
+    SNIPPET_TABLE_ID = 836
 
     @staticmethod
     def _process_template_data(entry):
@@ -19,6 +20,11 @@ class BaserowTemplates(BaserowApi):
             entry["id"] = entry_id
             self._process_template_data(entry)
         return data
+
+    def get_snippets(self):
+        data: dict = self.get_data(self.SNIPPET_TABLE_ID, writable_only=False)
+        snippets_by_name = {entry["Name"]: entry["SnippetData"] for entry in data.values()}
+        return snippets_by_name
 
     def get_template(self, entry_id):
          data = self.get_entry(self.TEMPLATE_TABLE_ID, entry_id)

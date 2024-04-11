@@ -37,7 +37,9 @@ def generate_docx_file(case_id, template_id) -> Tuple[str, bytes]:
 
     case_data = BS.get_case_data(case_id)
 
-    mapped_docx = generate_docx(template_config, case_data, template_docx)
+    snippet_data = BS.get_snippets()
+
+    mapped_docx = generate_docx(template_config, case_data, template_docx, snippet_data)
     filename = f"SV-{case_id}_{template['Name'].replace(' ', '_')}.docx"
     return filename, mapped_docx
 
@@ -67,7 +69,6 @@ def generate():
 @app.route("/templates", methods=["GET", "POST"])
 def templates():
     functions_data = [{"name": name, "doc": fun.__doc__} for name, fun in RULE_FUNCTIONS.items()]
-    print(functions_data)
     if request.method == "POST":
         form_response = request.form.to_dict()
         template_id = form_response.pop("template_id")

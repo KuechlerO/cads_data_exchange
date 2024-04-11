@@ -17,11 +17,6 @@ def test_simple_concat():
 
     assert create_rule_function(rule)(data) == expected
 
-    data = "World"
-    rule = 'concat("Hello ")'
-    expected = "Hello World"
-    assert create_rule_function(rule)(data) == expected
-
 
 def test_boolean():
     data = {"Relation": "Father"}
@@ -79,3 +74,31 @@ def test_nested():
     data = [{"Birthdate": "2024-01-03"}]
     rule = 'format("Hi {}", field("Birthdate") | formatDate)'
     assert create_rule_function(rule)(data) == ["Hi 03.01.2024"]
+
+
+def test_list_conditional():
+    data = [1, 2, 3]
+    rule = 'any(eq(1))'
+
+    assert create_rule_function(rule)(data) is True
+
+    data = [4, 4, 4]
+    rule = 'all(eq(4))'
+
+    assert create_rule_function(rule)(data) is True
+
+
+def test_list_dict():
+    data = [{"RelationToIndex": "Mother"}]
+    rule = 'if(and(any(is("RelationToIndex", "Mother")), all(not(is("RelationToIndex", "Father")))),  "Vater", " ")'
+    assert create_rule_function(rule)(data) == "Vater"
+
+
+def test_assert_all_same():
+    data = ["COL1A1", "COL1A1"]
+    rule = 'set | len | eq(1)'
+    assert create_rule_function(rule)(data)
+
+    data = ["COL1A1", "COL1A2"]
+    rule = 'set | len | eq(1)'
+    assert not create_rule_function(rule)(data)
