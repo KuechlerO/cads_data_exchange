@@ -706,7 +706,7 @@ def get_contract_control_state(entry):
         "Beratung"
     ]
 
-    new_state = entry["Kati: Teilnahmeerklärung versendet"]
+    new_state = entry["Teilnahmeerklärung versendet"]
     if entry["Vertrag"] in NON_BILLED_CONTRACT_TYPES:
         new_state = NO_BILLING
     elif entry["Vertrag"] in BILLED_CONTRACT_TYPES:
@@ -750,7 +750,7 @@ STATUS_UPDATE_MAPPINGS = [
     ),
     Mapping(
         "",
-        "Kati: Teilnahmeerklärung versendet",
+        "Teilnahmeerklärung versendet",
         transform=get_contract_control_state,
         when=Condition.NONE,
     ),
