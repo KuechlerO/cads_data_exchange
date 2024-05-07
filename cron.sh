@@ -12,4 +12,4 @@ cd "$(dirname "$0")"
 micromamba activate cads_data_exchange
 bash ./export_phenotips.sh
 # bash fetch_data.sh
-NO_PROXY="charite.de" python -m data_exchange
+NO_PROXY="charite.de" python -m data_exchange --sodar --varfish --sams

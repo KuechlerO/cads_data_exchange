@@ -186,7 +186,9 @@ def apply_updates(target_table_name: str, baserow_updates: List[BaserowUpdate], 
             update_entries.append(result_entry)
 
     if not dry_run:
-        BR.add_data_batch(table_id, update_entries)
+        errors = BR.add_data_batch(table_id, update_entries)
+        if errors:
+            logger.error("Update failed with message: {}", errors)
     else:
         logger.warning(f"DRY RUN. DATA NOT UPLOADED.")
 

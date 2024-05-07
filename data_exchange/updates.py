@@ -518,7 +518,12 @@ def update_baserow_from_varfish_variants(all_cases, findings) -> List[BaserowUpd
     return all_updates
 
 
-def update_baserow_relatives(cases_data, relatives_data, pel_data, sodar_data, varfish_data) -> List[BaserowUpdate]:
+def update_baserow_relatives(
+    cases_data,
+    relatives_data,
+    pel_data,
+    sodar_data: Optional[dict],
+    varfish_data: Optional[dict]) -> List[BaserowUpdate]:
     """Update Patients table with all persons found in either Cases or PEL."""
     # use pel and cases to find data for relatives
     def case_to_patient(entry_id, entry) -> dict:
@@ -610,32 +615,35 @@ def update_baserow_relatives(cases_data, relatives_data, pel_data, sodar_data, v
             final_entries.append(entry)
 
     # use sodar and varfish to find relative info
-    sodar_all_entries = [entry for dataset in sodar_data for entry in dataset["data"]]
-    sodar_by_family = defaultdict(list)
-    for entry in sodar_all_entries:
-        sodar_by_family[normalize_lbid(entry["Characteristics[Family]"])].append(entry)
+    if sodar_data is not None:
+        sodar_all_entries = [entry for dataset in sodar_data for entry in dataset["data"]]
+        sodar_by_family = defaultdict(list)
+        for entry in sodar_all_entries:
+            sodar_by_family[normalize_lbid(entry["Characteristics[Family]"])].append(entry)
 
-    sodar_id_to_relationship = {}
-    for fam_id, entries in sodar_by_family.items():
-        entries_by_lb_id_norm = {normalize_lbid(e["Sample Name"]): e for e in entries}
-        index_mother = None
-        index_father = None
-        siblings = []
-        for entry in entries:
-            is_index = normalize_lbid(entry["Sample Name"]) == fam_id
-            father_id = entry["Characteristics[Father]"]
-            mother_id = entry["Characteristics[Mother]"]
-            if is_index:
-                index_mother = normalize_lbid(mother_id)
-                index_father = normalize_lbid(father_id)
-            if (index_mother is not None and mother_id == index_mother) and (index_father is not None and father_id == index_father):
-                siblings.append(normalize_lbid(entry["Sample Name"]))
+        sodar_id_to_relationship = {}
+        for fam_id, entries in sodar_by_family.items():
+            entries_by_lb_id_norm = {normalize_lbid(e["Sample Name"]): e for e in entries}
+            index_mother = None
+            index_father = None
+            siblings = []
+            for entry in entries:
+                is_index = normalize_lbid(entry["Sample Name"]) == fam_id
+                father_id = entry["Characteristics[Father]"]
+                mother_id = entry["Characteristics[Mother]"]
+                if is_index:
+                    index_mother = normalize_lbid(mother_id)
+                    index_father = normalize_lbid(father_id)
+                if (index_mother is not None and mother_id == index_mother) and (index_father is not None and father_id == index_father):
+                    siblings.append(normalize_lbid(entry["Sample Name"]))
 
-        sodar_id_to_relationship[index_mother] = "Mother"
-        sodar_id_to_relationship[index_father] = "Father"
-        sodar_id_to_relationship[fam_id] = "Index"
-        for sibling in siblings:
-            sodar_id_to_relationship[sibling] = "Sibling"
+            sodar_id_to_relationship[index_mother] = "Mother"
+            sodar_id_to_relationship[index_father] = "Father"
+            sodar_id_to_relationship[fam_id] = "Index"
+            for sibling in siblings:
+                sodar_id_to_relationship[sibling] = "Sibling"
+    else:
+        sodar_id_to_relationship = {}
 
     for entry in final_entries:
         if rel := sodar_id_to_relationship.get(normalize_lbid(entry["LB ID"])):
@@ -701,22 +709,22 @@ def get_contract_control_state(entry):
         "Labor Berlin Befund nach KÜ",
     ]
 
-    BILLED_CONTRACT_TYPES = [
-        "Selektivvertrag",
-        "Beratung"
-    ]
+    # BILLED_CONTRACT_TYPES = [
+    #     "Selektivvertrag",
+    #     "Beratung"
+    # ]
 
     new_state = entry["Teilnahmeerklärung versendet"]
     if entry["Vertrag"] in NON_BILLED_CONTRACT_TYPES:
         new_state = NO_BILLING
-    elif entry["Vertrag"] in BILLED_CONTRACT_TYPES:
-        match (entry["Vertrag"], entry["LB ID"], entry["Falltyp"]):
-            case "Selektivvertrag", lb_id, _ if lb_id:
-                new_state = MISSING_PARTICIPATION
-            case "Beratung", _, _:
-                new_state = MISSING_PARTICIPATION
-            case _, _, "Re-Analyse":
-                new_state = MISSING_PARTICIPATION
+    # elif entry["Vertrag"] in BILLED_CONTRACT_TYPES:
+    #     match (entry["Vertrag"], entry["LB ID"], entry["Falltyp"]):
+    #         case "Selektivvertrag", lb_id, _ if lb_id:
+    #             new_state = MISSING_PARTICIPATION
+    #         case "Beratung", _, _:
+    #             new_state = MISSING_PARTICIPATION
+    #         case _, _, "Re-Analyse":
+    #             new_state = MISSING_PARTICIPATION
 
     return new_state
 

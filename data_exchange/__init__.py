@@ -3,6 +3,8 @@ from .baserow import get_baserow_table, apply_updates, merge_entries
 from .updates import update_baserow_from_lb, update_baserow_from_sodar, update_baserow_from_varfish, update_baserow_from_sams, update_baserow_from_varfish_variants, update_entry_status, update_baserow_relatives
 from .validation import apply_validations, create_validation_updates
 
+from loguru import logger
+
 BASEROW = "baserow"
 VARFISH = "varfish"
 SODAR = "sodar"
@@ -20,12 +22,10 @@ ALL_DATA = {
     SODAR: sodar.get_data,
 }
 
-def run(dry_run: bool):
+def run(dry_run: bool, get_sodar: bool, get_varfish: bool, get_sams: bool):
     """Fetch data from all data sources and create updates and validations.
     """
     all_baserow_data = ALL_DATA[BASEROW]()
-    sodar_data = ALL_DATA[SODAR]()
-    varfish_data = ALL_DATA[VARFISH]()
 
     phenotips_data = get_baserow_table(all_baserow_data, "Cases")
     relatives_data = get_baserow_table(all_baserow_data, "Patients")
@@ -35,11 +35,26 @@ def run(dry_run: bool):
 
     all_updates = []
     all_updates += update_baserow_from_lb(phenotips_data, pel_data)
-    all_updates += update_baserow_from_sodar(phenotips_data, sodar_data)
-    all_updates += update_baserow_from_varfish(phenotips_data, varfish_data)
-    all_updates += update_baserow_from_sams(phenotips_data, ALL_DATA[SAMS]())
 
-    findings_updates = update_baserow_from_varfish_variants(phenotips_data, findings_data)
+    sodar_data = None
+    varfish_data = None
+    findings_updates = []
+
+    if get_sodar:
+        logger.info("Loading SODAR data")
+        sodar_data = ALL_DATA[SODAR]()
+        all_updates += update_baserow_from_sodar(phenotips_data, sodar_data)
+
+    if get_varfish:
+        logger.info("Loading VarFish data")
+        varfish_data = ALL_DATA[VARFISH]()
+        all_updates += update_baserow_from_varfish(phenotips_data, varfish_data)
+        findings_updates += update_baserow_from_varfish_variants(phenotips_data, findings_data)
+
+    if get_sams:
+        logger.info("Loading SAMS data")
+        all_updates += update_baserow_from_sams(phenotips_data, ALL_DATA[SAMS]())
+
     relatives_updates = update_baserow_relatives(phenotips_data, relatives_data, pel_data, sodar_data, varfish_data)
 
     # perform validation steps
