@@ -9,6 +9,7 @@ from enum import Enum
 
 from python_baserow_simple import BaserowApi
 from data_exchange.config import settings
+from data_exchange.planner_match import is_cads
 
 DB_PATH = "/media/WMG/WMG-LZG/klinische Genetik/Terminplaner v.240/Arztpra2.MDB"
 
@@ -96,13 +97,9 @@ print("Sprechstundentermine der nächsten 14 Tage\n", file=msg_build)
 start = datetime.datetime.now()
 next_appointments = []
 
+
 def is_cads_appointment(app):
-    if app.info is None:
-        return False
-    if "CADS" in app.info or "Selektivvertrag" in app.info:
-        if app.present == PresentEnum.PRESENT.value:
-            return True
-    return False
+    return is_cads(app.info) and app.present == PresentEnum.PRESENT.value
 
 
 def is_recent_appointment(app):
