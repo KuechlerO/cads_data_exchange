@@ -7,7 +7,6 @@ from python_baserow_simple import BaserowApi
 from attrs import define, field
 from loguru import logger
 
-
 COLUMN_CLINVAR_STATUS = "ClinVar-Upload Status"
 COLUMN_CLINVAR_REASON = "ClinVar-Upload Begründung"
 REASON_AUTOVALIDATION = "AutoValidation Fehler"
@@ -78,6 +77,16 @@ class BaserowUpdate:
     id: int
     entry: dict
     updates: Dict[str, str] = field(factory=dict)
+
+    @classmethod
+    def init_automerge(cls, entry_id, entry, new_data):
+        if entry is None:
+            entry = {}
+
+        updates = {
+            new_key: new_entry for new_key, new_entry in new_data.items() if new_key not in entry or entry[new_key] != new_entry
+        }
+        return cls(entry_id, entry, updates)
 
     @property
     def has_updates(self):
@@ -181,14 +190,15 @@ def apply_updates(target_table_name: str, baserow_updates: List[BaserowUpdate], 
     update_entries = []
     for update in merged_updates:
         if update.has_updates:
-            logger.debug(f"Updating table {target_table_name} entry {update.id} Fields: {', '.join(f'{k}={v}' for k, v in update.updates.items())}")
             result_entry = update.result_entry()
             update_entries.append(result_entry)
 
     if not dry_run:
         errors = BR.add_data_batch(table_id, update_entries)
         if errors:
-            logger.error("Update failed with message: {}", errors)
+            logger.error("Update table {} failed with message: {}, failed to update {} entries", table_id, errors, len(update_entries))
+        else:
+            logger.info("Updating table {} {}", table_id, target_table_name)
     else:
         logger.warning(f"DRY RUN. DATA NOT UPLOADED.")
 

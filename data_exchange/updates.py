@@ -651,7 +651,7 @@ def update_baserow_relatives(
                 entry["RelationToIndex"] = rel
 
     # create_updates
-    updates = [BaserowUpdate(e.get("id", None), e, e) for e in all_merged_entries]
+    updates = [BaserowUpdate.init_automerge(e.get("id", None), relatives_data.get(e.get("id", None), None), e) for e in all_merged_entries]
 
     return updates
 
