@@ -306,7 +306,7 @@ def varfish_to_zygosity(varfish_entry):
 
 
 def varfish_to_resulttype(varfish_entry):
-    if "zufallsbefund" in varfish_entry["comment_text"]:
+    if "zufallsbefund" in varfish_entry["comment_text"] or varfish_entry["flag_incidental"]:
         return "Incidental"
     if varfish_entry["flag_candidate"] and varfish_entry["acmg_class_override"] == 3:
         return "Candidate"

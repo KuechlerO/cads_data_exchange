@@ -243,7 +243,7 @@ class Varfish:
             return (entry["chromosome"], entry["start"], entry["end"], entry["sv_sub_type"])
 
         final_variants_by_pos = {
-            to_pos(entry): entry for entry in variant_data_resp["rows"] if entry["flag_final_causative"]
+            to_pos(entry): entry for entry in variant_data_resp["rows"] if entry["flag_final_causative"] or entry["flag_incidental"] or entry["flag_candidate"]
         }
 
         variant_comments_by_pos = defaultdict(list)
@@ -318,13 +318,13 @@ class Varfish:
         final_sv_variants = [
             {"comment": sv_pos_to_comment.get(to_pos_sv(entry), ""), **entry} for entry in
             self._get(self.svs_flags_url, varfish_uuid=varfish_uuid)
-            if entry["flag_final_causative"]
+            if entry["flag_final_causative"] or entry["flag_incidental"]
         ]
 
         resp = self.session.get(self.url(self.svs_flags_url).format(varfish_uuid=varfish_uuid))
         resp.raise_for_status()
         final_sv_variants = [
-            entry for entry in resp.json() if entry["flag_final_causative"]
+            entry for entry in resp.json() if entry["flag_final_causative"] or entry["flag_incidental"]
         ]
 
         return final_variants + final_sv_variants
