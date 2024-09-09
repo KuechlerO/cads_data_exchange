@@ -281,7 +281,7 @@ class Varfish:
             variant["mehari"] = self.get_variant_mehari(variant["chromosome"], variant["start"], variant["reference"], variant["alternative"], variant["hgnc_id"])
 
             if not variant["mehari"]["result"]:
-                raise RuntimeError("Mehari has no annotation for variant")
+                logger.warning(f"Mehari has no annotation for variant {variant['chromosome']}-{variant['start']}-{variant['reference']}-{variant['alternative']} {variant['hgnc_id']}")
 
             if not variant["gene_symbol"]:
                 logger.warning("Variant with empty gene_symbol, try to fill from additional annotation sources")
