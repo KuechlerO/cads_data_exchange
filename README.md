@@ -42,3 +42,17 @@ $ python -m data_exchange --sodar --varfish --sams
 ```
 
 Use `--dry-run` to not change any data in the connected baserow database.
+
+### Clinvar Upload/Download
+
+Clinvar upload works on a per-batch basis and uses the retrieval and upload
+scripts found in `./scripts/`.
+
+Batch number can be an arbitrary string is just used to set storing locations
+for retrieved data for comparisons, as well as uniquely identifying batches for
+[clinvar-this](https://github.com/varfish-org/clinvar-this) operation.
+
+Use `./scripts/retrieve_clinvar.sh <Batch number>` to download data from clinvar
+on currently uploaded data.
+
+Use `./scripts/upload_clinvar.sh <Batch number>` to upload data again.
